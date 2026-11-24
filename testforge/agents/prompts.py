@@ -6,6 +6,7 @@ prompts are part of the method described in the thesis).
 
 from __future__ import annotations
 
+from ..core.budget import focused_source
 from ..models import ModuleInfo, Mutant, TestPlan
 
 PLANNER_SYSTEM = """You are the test lead of an automated unit-testing team.
@@ -62,14 +63,19 @@ Only call a mutant equivalent if you are confident.
 Return only the new tests (with the imports they need), not the existing suite."""
 
 
-def _module_block(info: ModuleInfo) -> str:
-    numbered = "\n".join(f"{i:4d} | {line}" for i, line in enumerate(info.source.splitlines(), 1))
-    return f"Module name: `{info.module_name}`\n\n```python\n{numbered}\n```"
+def _module_block(info: ModuleInfo, focus: set[str] | None = None) -> str:
+    note = ""
+    if focus is not None:
+        note = ("\nOnly the functions under test are shown in full; other bodies are elided. "
+                "Line numbers are the original ones.")
+    return f"Module name: `{info.module_name}`{note}\n\n```python\n{focused_source(info, focus)}\n```"
 
 
-def _analysis_block(info: ModuleInfo) -> str:
+def _analysis_block(info: ModuleInfo, focus: set[str] | None = None) -> str:
     rows = []
     for f in info.functions:
+        if focus is not None and f.qualname not in focus:
+            continue
         params = ", ".join(p.name + (f": {p.annotation}" if p.annotation else "")
                            + (f" = {p.default}" if p.default else "") for p in f.params)
         extra = []
@@ -81,17 +87,26 @@ def _analysis_block(info: ModuleInfo) -> str:
                     + (f" -> {f.returns}" if f.returns else "")
                     + f"  [complexity {f.complexity}" + ("; " + "; ".join(extra) if extra else "") + "]")
     for c in info.classes:
+        if focus is not None and not any(q.startswith(c.name + ".") for q in focus):
+            continue
         init = ", ".join(p.name + (f" = {p.default}" if p.default else "") for p in c.init_params)
         rows.append(f"- class {c.name}({init}) methods: {', '.join(c.methods)}")
     return "Static analysis:\n" + "\n".join(rows)
 
 
-def planner_prompt(info: ModuleInfo) -> str:
-    return f"{_module_block(info)}\n\n{_analysis_block(info)}\n\nProduce the test plan."
+def _scope_line(focus: set[str] | None) -> str:
+    if focus is None:
+        return ""
+    return "\n\nScope: only " + ", ".join(sorted(focus)) + " (other parts are covered separately)."
 
 
-def writer_prompt(info: ModuleInfo, plan: TestPlan | None) -> str:
-    parts = [_module_block(info), _analysis_block(info)]
+def planner_prompt(info: ModuleInfo, focus: set[str] | None = None) -> str:
+    return (f"{_module_block(info, focus)}\n\n{_analysis_block(info, focus)}{_scope_line(focus)}"
+            "\n\nProduce the test plan.")
+
+
+def writer_prompt(info: ModuleInfo, plan: TestPlan | None, focus: set[str] | None = None) -> str:
+    parts = [_module_block(info, focus), _analysis_block(info, focus) + _scope_line(focus)]
     if plan is not None:
         cases = "\n".join(f"- [{c.category}] {c.target}: {c.description} | inputs: {c.inputs} "
                           f"| expected: {c.expected}" for c in plan.cases)
@@ -103,13 +118,25 @@ def writer_prompt(info: ModuleInfo, plan: TestPlan | None) -> str:
     return "\n\n".join(parts)
 
 
-def fixer_prompt(info: ModuleInfo, test_code: str, failures: str) -> str:
-    return (f"{_module_block(info)}\n\nCurrent test file:\n```python\n{test_code}\n```\n\n"
+def fixer_prompt(info: ModuleInfo, test_code: str, failures: str,
+                 focus: set[str] | None = None, partial: bool = False) -> str:
+    if partial:
+        return (f"{_module_block(info, focus)}\n\nFailing tests (the rest of the suite passes and is "
+                f"not shown):\n```python\n{test_code}\n```\n\npytest failures:\n```\n{failures}\n```\n\n"
+                "Return corrected versions of ONLY these tests, with the imports they need. "
+                "Keep their names.")
+    return (f"{_module_block(info, focus)}\n\nCurrent test file:\n```python\n{test_code}\n```\n\n"
             f"pytest failures:\n```\n{failures}\n```\n\nReturn the corrected complete test file.")
 
 
-def refiner_prompt(info: ModuleInfo, test_code: str, survivors: list[Mutant]) -> str:
+def refiner_prompt(info: ModuleInfo, test_code: str | None, survivors: list[Mutant],
+                   focus: set[str] | None = None, existing_names: list[str] | None = None) -> str:
     listing = "\n".join(m.describe() for m in survivors)
-    return (f"{_module_block(info)}\n\nExisting test suite:\n```python\n{test_code}\n```\n\n"
+    if test_code is not None:
+        suite = f"Existing test suite:\n```python\n{test_code}\n```"
+    else:
+        suite = ("Existing test functions (code not shown; do not reuse these names): "
+                 + ", ".join(existing_names or []))
+    return (f"{_module_block(info, focus)}\n\n{suite}\n\n"
             f"Surviving mutants ({len(survivors)}):\n{listing}\n\n"
             "Write new tests that kill these mutants.")

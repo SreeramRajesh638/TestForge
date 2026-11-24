@@ -22,6 +22,11 @@ DEFAULT_MODELS = {"claude": "claude-opus-5-5", "ollama": "qwen2.5-coder:3b", "mo
                   "groq": "openai/gpt-oss-120b", "openrouter": "openai/gpt-oss-120b:free"}
 
 
+# Default prompt budgets for free tiers (leaves room for the reply in the
+# per-minute token limit). Override with Config(max_prompt_tokens=...).
+FREE_TIER_PROMPT_BUDGET = {"groq": 4500}
+
+
 @dataclass
 class Config:
     # LLM backend: "claude" (Anthropic API), "ollama" (free local models),
@@ -32,6 +37,9 @@ class Config:
     effort: str = "high"  # low | medium | high | xhigh | max (Claude only)
     ollama_host: str | None = None     # default http://127.0.0.1:11434
     num_ctx: int = 8192                # Ollama context window (tokens)
+    # Largest prompt to send in one request (estimated tokens). None = no limit.
+    # Set for services with per-request caps (Groq free tier: 8,000 tokens/minute).
+    max_prompt_tokens: int | None = None
 
     # Feedback loop limits.
     max_fix_attempts: int = 2          # Fixer rounds per execution
@@ -55,6 +63,8 @@ class Config:
     def __post_init__(self) -> None:
         if self.model is None:
             self.model = DEFAULT_MODELS.get(self.llm, "mock")
+        if self.max_prompt_tokens is None and self.llm in FREE_TIER_PROMPT_BUDGET:
+            self.max_prompt_tokens = FREE_TIER_PROMPT_BUDGET[self.llm]
 
     def to_dict(self) -> dict:
         return asdict(self)

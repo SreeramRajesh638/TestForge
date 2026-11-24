@@ -18,7 +18,9 @@ from pathlib import Path
 from .agents.base import EventFn
 from .agents.team import (AnalyzerAgent, ExecutorAgent, FixerAgent, MutationCriticAgent,
                           PlannerAgent, WriterAgent)
+from .agents import prompts
 from .config import Config
+from .core.budget import chunk_functions, estimate_tokens
 from .core.suite import count_tests, merge_suites, prune_tests
 from .llm import LLM, LLMError, make_llm
 from .models import ExecResult, IterationRecord, ModuleInfo, MutationResult, RunReport
@@ -53,13 +55,9 @@ class Orchestrator:
         self.phase("analyze")
         info = analyzer.run(path)
 
-        plan = None
-        if cfg.use_planner:
-            self.phase("plan")
-            plan = planner.run(info)
-
-        self.phase("write")
-        code = writer.run(info, plan)
+        code = self._generate(info, planner, writer)
+        if code is None:
+            return self._report(info, [], "", "llm_error", llm, start, None)
 
         self.phase("execute")
         code, result, fix_rounds, pruned = self._stabilize(info, code, executor, fixer)
@@ -137,6 +135,49 @@ class Orchestrator:
 
         self.phase("done", stop)
         return self._report(info, records, code, stop, llm, start, mut)
+
+    # ------------------------------------------------------------------
+    def _chunks(self, info: ModuleInfo) -> list[set[str] | None]:
+        """[None] when the whole module fits the prompt budget, else groups of
+        functions whose focused views fit."""
+        budget = self.config.max_prompt_tokens
+        if not budget:
+            return [None]
+        full = prompts.WRITER_SYSTEM + prompts.writer_prompt(info, None)
+        if estimate_tokens(full) <= budget * 0.6:  # leave room for the plan in the writer prompt
+            return [None]
+        skeleton = prompts.WRITER_SYSTEM + prompts.writer_prompt(info, None, focus=set())
+        chunks = chunk_functions(info, int(budget * 0.6), estimate_tokens(skeleton))
+        self.emit("agent", {"agent": "Orchestrator", "emoji": "🎯",
+                            "message": f"Module exceeds the prompt budget ({budget} tokens): "
+                                       f"working in {len(chunks)} chunks of functions"})
+        return chunks
+
+    def _generate(self, info: ModuleInfo, planner: PlannerAgent, writer: WriterAgent) -> str | None:
+        """Plan and write tests, chunk by chunk when the module is too large.
+        A chunk whose LLM call fails is skipped; None if every chunk failed."""
+        code, failures = "", []
+        chunks = self._chunks(info)
+        for n, focus in enumerate(chunks, 1):
+            label = "" if focus is None else f"chunk {n}/{len(chunks)}"
+            try:
+                plan = None
+                if self.config.use_planner:
+                    self.phase("plan", label)
+                    plan = planner.run(info, focus)
+                self.phase("write", label)
+                part = writer.run(info, plan, focus)
+            except LLMError as e:
+                failures.append(str(e))
+                self.emit("error", {"message": f"{label or 'generation'} failed: {e}"})
+                continue
+            try:
+                code = merge_suites(code, part)
+            except SyntaxError:
+                code = code or part  # unparsable part: the Executor/Fixer will deal with it
+        if not code and failures:
+            raise LLMError(failures[0])
+        return code
 
     # ------------------------------------------------------------------
     def _stabilize(self, info: ModuleInfo, code: str, executor: ExecutorAgent,

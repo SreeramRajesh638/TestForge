@@ -103,3 +103,34 @@ def is_valid_python(code: str) -> str | None:
         return None
     except SyntaxError as e:
         return f"SyntaxError line {e.lineno}: {e.msg}"
+
+
+def list_test_names(code: str) -> list[str]:
+    """Names of the test functions (and test methods) in a file."""
+    try:
+        _, _, tests = _split(code)
+    except SyntaxError:
+        return []
+    names = []
+    for t in tests:
+        if isinstance(t, ast.ClassDef):
+            names += [x.name for x in t.body if isinstance(x, ast.FunctionDef) and x.name.startswith("test")]
+        else:
+            names.append(t.name)
+    return names
+
+
+def extract_tests(code: str, names: set[str]) -> str:
+    """A runnable file with the imports/helpers of ``code`` and only the named
+    top-level tests (test classes are kept whole if any method is named)."""
+    imports, helpers, tests = _split(code)
+    base = {n.split("[")[0] for n in names}
+    keep = [t for t in tests if t.name in base or (isinstance(t, ast.ClassDef) and any(
+        isinstance(x, ast.FunctionDef) and x.name in base for x in t.body))]
+    return ast.unparse(ast.Module(body=imports + helpers + keep, type_ignores=[])) + "\n"
+
+
+def replace_tests(code: str, names: set[str], new_code: str) -> str:
+    """Drop the named tests from ``code`` and merge in ``new_code``."""
+    without, _ = prune_tests(code, names)
+    return merge_suites(without, new_code)

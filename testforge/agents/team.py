@@ -14,12 +14,15 @@ validated structured output so the orchestrator never parses free text.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ..core.analysis import analyze_file, analyze_source
 from ..core.mutation import run_mutation_analysis
 from ..core.runner import run_tests
-from ..core.suite import is_valid_python, strip_code_fences
+from ..core.budget import estimate_tokens
+from ..core.suite import (extract_tests, is_valid_python, replace_tests, strip_code_fences,
+                          list_test_names)
 from ..models import ExecResult, GeneratedTests, ModuleInfo, MutationResult, RefinedTests, TestPlan
 from . import prompts
 from .base import Agent
@@ -40,9 +43,10 @@ class AnalyzerAgent(Agent):
 class PlannerAgent(Agent):
     name, emoji = "Planner", "📋"
 
-    def run(self, info: ModuleInfo) -> TestPlan:
-        plan = self.llm.complete("planner", prompts.PLANNER_SYSTEM, prompts.planner_prompt(info),
-                                 TestPlan, {"module": info})
+    def run(self, info: ModuleInfo, focus: set[str] | None = None) -> TestPlan:
+        plan = self.llm.complete("planner", prompts.PLANNER_SYSTEM,
+                                 prompts.planner_prompt(info, focus), TestPlan,
+                                 {"module": info, "focus": focus})
         cats: dict[str, int] = {}
         for c in plan.cases:
             cats[c.category] = cats.get(c.category, 0) + 1
@@ -54,16 +58,30 @@ class PlannerAgent(Agent):
 class WriterAgent(Agent):
     name, emoji = "Writer", "✍️"
 
-    def run(self, info: ModuleInfo, plan: TestPlan | None) -> str:
-        out = self.llm.complete("writer", prompts.WRITER_SYSTEM, prompts.writer_prompt(info, plan),
-                                GeneratedTests, {"module": info, "plan": plan})
+    def run(self, info: ModuleInfo, plan: TestPlan | None, focus: set[str] | None = None) -> str:
+        out = self.llm.complete("writer", prompts.WRITER_SYSTEM,
+                                prompts.writer_prompt(info, plan, focus), GeneratedTests,
+                                {"module": info, "plan": plan, "focus": focus})
         code = strip_code_fences(out.code)
         self.log(f"Wrote test file ({len(code.splitlines())} lines)", notes=out.notes)
         return code
 
     def refine(self, info: ModuleInfo, test_code: str, survivors) -> RefinedTests:
-        out = self.llm.complete("refiner", prompts.REFINER_SYSTEM,
-                                prompts.refiner_prompt(info, test_code, survivors), RefinedTests,
+        prompt = prompts.refiner_prompt(info, test_code, survivors)
+        budget = self.config.max_prompt_tokens
+        if budget and estimate_tokens(prompts.REFINER_SYSTEM + prompt) > budget:
+            # focus on the functions the survivors live in; list test names instead of code
+            survivors = list(survivors)
+            while True:
+                funcs = {m.function for m in survivors}
+                focus = None if None in funcs else funcs
+                prompt = prompts.refiner_prompt(info, None, survivors, focus, list_test_names(test_code))
+                if estimate_tokens(prompts.REFINER_SYSTEM + prompt) <= budget or len(survivors) <= 3:
+                    break
+                survivors = survivors[: max(3, len(survivors) // 2)]
+            self.log(f"Prompt over budget: focusing on {len(survivors)} mutants in "
+                     f"{'the module' if focus is None else ', '.join(sorted(focus))}")
+        out = self.llm.complete("refiner", prompts.REFINER_SYSTEM, prompt, RefinedTests,
                                 {"module": info, "test_code": test_code, "survivors": survivors})
         out.code = strip_code_fences(out.code)
         self.log(f"Wrote new tests targeting {len(survivors)} surviving mutants"
@@ -99,8 +117,24 @@ class FixerAgent(Agent):
             failures = result.collection_error
         else:
             failures = "\n\n".join(f"FAILED {o.name}\n{o.message}" for o in result.failing)[:12000]
-        out = self.llm.complete("fixer", prompts.FIXER_SYSTEM,
-                                prompts.fixer_prompt(info, test_code, failures), GeneratedTests,
+        prompt = prompts.fixer_prompt(info, test_code, failures)
+        budget = self.config.max_prompt_tokens
+        if budget and not result.collection_error and \
+                estimate_tokens(prompts.FIXER_SYSTEM + prompt) > budget:
+            # send only the failing tests and the functions they call
+            failing = {o.name.split("[")[0] for o in result.failing}
+            subset = extract_tests(test_code, failing)
+            focus = {f.qualname for f in info.functions
+                     if re.search(rf"\b{re.escape(f.name)}\b", subset)} or None
+            prompt = prompts.fixer_prompt(info, subset, failures[:4000], focus, partial=True)
+            out = self.llm.complete("fixer", prompts.FIXER_SYSTEM, prompt, GeneratedTests,
+                                    {"module": info, "test_code": test_code, "result": result})
+            self.log(f"Attempted repair of {len(failing)} failing test(s) (focused)", notes=out.notes)
+            try:
+                return replace_tests(test_code, failing, strip_code_fences(out.code))
+            except SyntaxError:
+                return test_code
+        out = self.llm.complete("fixer", prompts.FIXER_SYSTEM, prompt, GeneratedTests,
                                 {"module": info, "test_code": test_code, "result": result})
         self.log(f"Attempted repair of {len(result.failing) or 'collection'} failing test(s)",
                  notes=out.notes)
