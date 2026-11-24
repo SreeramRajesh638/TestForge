@@ -471,6 +471,10 @@ class OpenAICompatClient(LLM):
                     return json.loads(resp.read().decode())
             except urllib.error.HTTPError as e:
                 detail = e.read().decode(errors="replace")[:600]
+                if e.code == 429 and _is_daily_limit(detail):
+                    raise DailyQuotaExceeded(
+                        f"{self.provider}: daily free-tier quota used up; try again after it resets. "
+                        f"{detail}") from e
                 if e.code == 429:
                     delay = _retry_after(e.headers, detail)
                     if waited + delay > self.max_wait_s:
@@ -542,6 +546,15 @@ class OpenAICompatClient(LLM):
                     "Your previous reply did not match the required JSON schema:\n"
                     f"{last_error}\nReply again, with valid JSON only."}]
         raise LLMError(f"{role}: {self.provider} reply did not match the schema: {last_error}")
+
+
+class DailyQuotaExceeded(LLMError):
+    """The service's per-day limit is used up: waiting minutes will not help."""
+
+
+def _is_daily_limit(detail: str) -> bool:
+    d = detail.lower()
+    return "per day" in d or "(tpd)" in d or "(rpd)" in d
 
 
 class _HTTPStatus(Exception):

@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from testforge.config import Config  # noqa: E402
+from testforge.llm import DailyQuotaExceeded  # noqa: E402
 from testforge.orchestrator import Orchestrator  # noqa: E402
 
 BASE = Config(max_refine_iterations=3, target_mutation_score=0.95)
@@ -81,6 +82,8 @@ def run_one(module: Path, name: str, cfg: Config, rep: int) -> tuple[dict, list[
     row = {"module": module.stem, "config": name, "rep": rep}
     try:
         report = Orchestrator(replace(cfg, seed=cfg.seed + rep)).run(str(module))
+    except DailyQuotaExceeded:
+        raise  # stop the sweep; rerun later with --resume
     except Exception as e:  # keep the sweep going; record the failure
         return {**row, "status": "error", "error": f"{type(e).__name__}: {e}"}, []
     if not report.iterations:
@@ -228,7 +231,13 @@ def main() -> int:
                     print(f"[{n}/{total}] {module.stem} · {name} · rep {rep} · already done", flush=True)
                     continue
                 print(f"[{n}/{total}] {module.stem} · {name} · rep {rep}", flush=True)
-                row, it = run_one(module, name, CONFIGS[name], rep)
+                try:
+                    row, it = run_one(module, name, CONFIGS[name], rep)
+                except DailyQuotaExceeded as e:
+                    save(out, rows, iters)
+                    print(f"\n! {e}\nStopped: daily quota used up. {len(rows)} runs saved in {out}. "
+                          "Run the same command with --resume after the quota resets.", flush=True)
+                    return 3
                 rows.append(row)
                 iters.extend(it)
                 score = row.get("mutation_score_final")

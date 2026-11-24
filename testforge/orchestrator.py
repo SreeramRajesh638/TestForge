@@ -22,7 +22,7 @@ from .agents import prompts
 from .config import Config
 from .core.budget import chunk_functions, estimate_tokens
 from .core.suite import count_tests, merge_suites, prune_tests
-from .llm import LLM, LLMError, make_llm
+from .llm import LLM, DailyQuotaExceeded, LLMError, make_llm
 from .models import ExecResult, IterationRecord, ModuleInfo, MutationResult, RunReport
 
 
@@ -190,6 +190,8 @@ class Orchestrator:
                 part = ""
                 for batch in self._plan_batches(info, plan, focus):
                     part = merge_suites(part, writer.run(info, batch, focus))
+            except DailyQuotaExceeded:
+                raise  # no point trying further chunks today
             except LLMError as e:
                 failures.append(str(e))
                 self.emit("error", {"message": f"{label or 'generation'} failed: {e}"})

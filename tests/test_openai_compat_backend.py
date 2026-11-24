@@ -119,3 +119,15 @@ def test_schema_retry_does_not_echo_the_invalid_reply(server):
     retry = FakeService.requests[1]["messages"]
     assert len(retry) == 3 and "x" * 100 not in json.dumps(retry)
     assert "did not match" in retry[-1]["content"]
+
+
+def test_daily_quota_fails_fast_without_waiting(server):
+    from testforge.llm import DailyQuotaExceeded
+    import time
+    msg = ("Rate limit reached for model `m` on tokens per day (TPD): Limit 200000, Used 199000, "
+           "Requested 4000. Please try again in 28m10s.")
+    FakeService.script = [(429, {"error": {"message": msg}})]
+    t0 = time.monotonic()
+    with pytest.raises(DailyQuotaExceeded, match="daily free-tier quota"):
+        client(server).complete("planner", "s", "p", TestPlan)
+    assert time.monotonic() - t0 < 5 and len(FakeService.requests) == 1
