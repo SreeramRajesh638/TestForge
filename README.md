@@ -91,6 +91,16 @@ python experiments/run.py --configs all --reps 3   # all configurations (needs A
 
 Results go to `results/`: `runs.csv`, `iterations.csv` (per-round curves) and `summary.md` (mean ± std tables).
 
+Then produce the statistics and figures for the thesis:
+
+```bash
+python experiments/analyze.py results
+```
+
+This writes `analysis.md` (summary tables, paired Wilcoxon signed-rank tests with Vargha-Delaney A12
+effect sizes, per-module scores) and PNG figures in `results/figures/`: mutation score per
+configuration, the refinement curve, feedback gain per module and the ablation chart.
+
 ### Benchmark
 
 15 real modules (2,550 lines) from open-source PyPI packages: roman, inflection, stringcase, pytimeparse,
