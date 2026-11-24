@@ -1,0 +1,9 @@
+Partial progress of the groq_full benchmark run (in progress; full CSVs are written when the run ends).
+
+[1/15] base58 · groq_full · rep 0
+        ok · mutation score 96%
+[2/15] baseconv · groq_full · rep 0
+        ok · mutation score 86%
+[3/15] docopt · groq_full · rep 0
+        error · LLMError: groq: request too large for this model/tier: {"error":{"message":"Request too large for model `openai/gpt-oss-120b` in organization `org_[redacted]` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Requested 11252, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing","type":"tokens","code":"rate_limit_exceeded"}}
+[4/15] filesize · groq_full · rep 0
