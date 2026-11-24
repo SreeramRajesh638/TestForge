@@ -14,7 +14,7 @@ import math
 
 from ..models import ModuleInfo
 
-CHARS_PER_TOKEN = 3.2  # conservative for code; real tokenizers vary
+CHARS_PER_TOKEN = 3.0  # conservative for code; real tokenizers vary
 
 
 def estimate_tokens(text: str) -> int:

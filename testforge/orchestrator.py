@@ -153,6 +153,27 @@ class Orchestrator:
                                        f"working in {len(chunks)} chunks of functions"})
         return chunks
 
+    def _plan_batches(self, info: ModuleInfo, plan, focus):
+        """Split a test plan so that each Writer prompt fits the budget."""
+        budget = self.config.max_prompt_tokens
+        if plan is None or not budget:
+            return [plan]
+        size = lambda p: estimate_tokens(prompts.WRITER_SYSTEM + prompts.writer_prompt(info, p, focus))
+        batches, todo = [], [plan]
+        while todo:
+            p = todo.pop(0)
+            if size(p) <= budget or len(p.cases) <= 2:
+                batches.append(p)
+            else:
+                half = len(p.cases) // 2
+                todo[:0] = [p.model_copy(update={"cases": p.cases[:half]}),
+                            p.model_copy(update={"cases": p.cases[half:]})]
+        if len(batches) > 1:
+            self.emit("agent", {"agent": "Orchestrator", "emoji": "🎯",
+                                "message": f"Test plan split into {len(batches)} writing batches "
+                                           "to fit the prompt budget"})
+        return batches
+
     def _generate(self, info: ModuleInfo, planner: PlannerAgent, writer: WriterAgent) -> str | None:
         """Plan and write tests, chunk by chunk when the module is too large.
         A chunk whose LLM call fails is skipped; None if every chunk failed."""
@@ -166,7 +187,9 @@ class Orchestrator:
                     self.phase("plan", label)
                     plan = planner.run(info, focus)
                 self.phase("write", label)
-                part = writer.run(info, plan, focus)
+                part = ""
+                for batch in self._plan_batches(info, plan, focus):
+                    part = merge_suites(part, writer.run(info, batch, focus))
             except LLMError as e:
                 failures.append(str(e))
                 self.emit("error", {"message": f"{label or 'generation'} failed: {e}"})

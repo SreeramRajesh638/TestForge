@@ -167,6 +167,9 @@ def main() -> int:
     p.add_argument("--claude-model", default=None, help="model for claude_* configs")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--out", default=str(ROOT / "results"))
+    p.add_argument("--resume", action="store_true",
+                   help="keep successful runs already in --out and only run the rest "
+                        "(for spreading a sweep over several days of a free tier)")
     a = p.parse_args()
 
     if a.configs == "all":
@@ -202,12 +205,28 @@ def main() -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows, iters = [], []
+    if a.resume and (out / "runs.csv").exists():
+        rows = [r for r in csv.DictReader(open(out / "runs.csv")) if r["status"] == "ok"]
+        done = {(r["module"], r["config"], str(r["rep"])) for r in rows}
+        if (out / "iterations.csv").exists():
+            iters = [r for r in csv.DictReader(open(out / "iterations.csv"))
+                     if (r["module"], r["config"], str(r["rep"])) in done]
+        for r in rows:  # CSV gives strings; summarize() needs numbers
+            for k in RUN_FIELDS:
+                if k not in ("module", "config", "status", "stop_reason", "error") and r.get(k) not in ("", None):
+                    r[k] = float(r[k]) if k != "rep" else int(r[k])
+        print(f"Resuming: {len(rows)} successful runs kept", flush=True)
+    else:
+        done = set()
     total = len(modules) * len(names) * a.reps
     n = 0
     for module in modules:
         for name in names:
             for rep in range(a.reps):
                 n += 1
+                if (module.stem, name, str(rep)) in done:
+                    print(f"[{n}/{total}] {module.stem} · {name} · rep {rep} · already done", flush=True)
+                    continue
                 print(f"[{n}/{total}] {module.stem} · {name} · rep {rep}", flush=True)
                 row, it = run_one(module, name, CONFIGS[name], rep)
                 rows.append(row)

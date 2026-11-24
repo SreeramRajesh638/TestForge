@@ -90,3 +90,15 @@ def test_pipeline_runs_in_chunks_under_a_tight_budget():
 def test_groq_gets_a_default_prompt_budget():
     assert Config(llm="groq").max_prompt_tokens == 4500
     assert Config(llm="claude").max_prompt_tokens is None
+
+
+def test_large_plan_is_split_into_writer_batches():
+    from testforge.models import PlannedCase, TestPlan
+    info = analyze_file(EXAMPLES / "calculator.py")
+    plan = TestPlan(cases=[PlannedCase(target="add", category="normal", description="case " * 30,
+                                       inputs="1, 2", expected="3") for _ in range(60)])
+    orch = Orchestrator(Config(llm="mock", max_prompt_tokens=2500))
+    batches = orch._plan_batches(info, plan, None)
+    assert len(batches) > 1 and sum(len(b.cases) for b in batches) == 60
+    for b in batches:
+        assert estimate_tokens(prompts.WRITER_SYSTEM + prompts.writer_prompt(info, b)) <= 2500
