@@ -52,6 +52,27 @@ LLM agents use **structured outputs** (pydantic schemas), so the orchestrator ne
 pip install -e .
 ```
 
+## Run it on the web (free, with Render)
+
+TestForge runs the Python code you give it, so the web version is protected by a password.
+
+1. Sign up at https://render.com (free; "Sign in with GitHub" is easiest).
+2. Click **New → Blueprint**, connect GitHub and pick the `testforge` repository.
+   Render reads `render.yaml` and sets everything up.
+3. When asked for environment variables, enter:
+   * `TESTFORGE_PASSWORD`: a password of your choice (required to open the dashboard)
+   * `GROQ_API_KEY`: your key from https://console.groq.com (optional, enables free AI)
+4. Click **Apply**. After the build (a few minutes) Render shows your URL, e.g.
+   `https://testforge-xxxx.onrender.com`. Open it, enter any user name and your password.
+
+On Render's free plan the service sleeps after about 15 minutes without visits; the first visit
+after that takes up to a minute to wake it. The same image runs anywhere Docker does:
+
+```bash
+docker build -t testforge-web .
+docker run -p 8000:8000 -e TESTFORGE_PASSWORD=choose-one -e GROQ_API_KEY=gsk_... testforge-web
+```
+
 ## Usage
 
 ```bash
