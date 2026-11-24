@@ -110,3 +110,12 @@ def test_service_side_json_failure_retries_then_uses_json_mode(server):
     assert kinds == ["json_schema", "json_schema", "json_object"]
     assert c.schema_mode is True  # only that call fell back
     assert FakeService.requests[0]["max_completion_tokens"] == 32768
+
+
+def test_schema_retry_does_not_echo_the_invalid_reply(server):
+    long_bad = {"code": "x" * 5000}  # missing 'notes' -> invalid
+    FakeService.script = [ok(long_bad), ok({"code": "def test_x(): pass\n", "notes": "n"})]
+    client(server).complete("writer", "s", "p", GeneratedTests)
+    retry = FakeService.requests[1]["messages"]
+    assert len(retry) == 3 and "x" * 100 not in json.dumps(retry)
+    assert "did not match" in retry[-1]["content"]

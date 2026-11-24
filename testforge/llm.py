@@ -536,9 +536,11 @@ class OpenAICompatClient(LLM):
                 return schema.model_validate_json(_strip_json(text))
             except ValidationError as e:
                 last_error = str(e)[:800]
-                messages = messages + [{"role": "assistant", "content": text},
-                                       {"role": "user", "content": "That reply did not match the required "
-                                                                   f"JSON schema:\n{last_error}\nReply again with valid JSON."}]
+                # Re-ask with only the error, not the invalid reply itself: echoing a long
+                # reply back can push the request over a service's size limit.
+                messages = messages[:2] + [{"role": "user", "content":
+                    "Your previous reply did not match the required JSON schema:\n"
+                    f"{last_error}\nReply again, with valid JSON only."}]
         raise LLMError(f"{role}: {self.provider} reply did not match the schema: {last_error}")
 
 

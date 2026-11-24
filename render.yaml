@@ -1,0 +1,12 @@
+# One-click deployment on Render (https://render.com): New > Blueprint > pick this repository.
+services:
+  - type: web
+    name: testforge
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: TESTFORGE_PASSWORD   # asked for during setup; protects the dashboard
+        sync: false
+      - key: GROQ_API_KEY         # optional: enables the free Groq backend
+        sync: false

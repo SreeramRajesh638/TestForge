@@ -2,12 +2,19 @@
 
 Runs execute in a background thread; their events are pushed to the browser
 over Server-Sent Events so the user can watch the agents work live.
+
+When deployed on the internet, set TESTFORGE_PASSWORD: the dashboard then
+asks for it (HTTP Basic auth, any user name). This matters because TestForge
+executes the Python code that is submitted to it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import hmac
 import json
+import os
 import queue
 import re
 import tempfile
@@ -15,8 +22,8 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..config import Config
@@ -27,6 +34,31 @@ EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
 
 app = FastAPI(title="TestForge")
 RUNS: dict[str, dict] = {}
+MAX_CONCURRENT_RUNS = int(os.environ.get("TESTFORGE_MAX_RUNS", "2"))
+_running = threading.BoundedSemaphore(MAX_CONCURRENT_RUNS)
+
+
+@app.middleware("http")
+async def password_gate(request: Request, call_next):
+    """Require TESTFORGE_PASSWORD (if set) for everything except /healthz."""
+    password = os.environ.get("TESTFORGE_PASSWORD")
+    if not password or request.url.path == "/healthz":
+        return await call_next(request)
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("basic "):
+        try:
+            _, _, given = base64.b64decode(header[6:]).decode().partition(":")
+        except Exception:
+            given = ""
+        if hmac.compare_digest(given.encode(), password.encode()):
+            return await call_next(request)
+    return Response("Password required", status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="TestForge"'})
+
+
+@app.get("/healthz")
+def healthz():
+    return PlainTextResponse("ok")
 
 
 class RunRequest(BaseModel):
@@ -60,6 +92,8 @@ def start_run(req: RunRequest):
         raise HTTPException(400, "module_name must be a valid Python identifier")
     if req.llm not in ("mock", "ollama", "groq", "openrouter", "claude"):
         raise HTTPException(400, "llm must be one of mock, ollama, groq, openrouter, claude")
+    if not _running.acquire(blocking=False):
+        raise HTTPException(429, f"{MAX_CONCURRENT_RUNS} runs are already in progress; try again shortly")
     run_id = uuid.uuid4().hex[:10]
     events: queue.Queue = queue.Queue()
     RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}
@@ -87,6 +121,7 @@ def start_run(req: RunRequest):
             RUNS[run_id]["status"] = "failed"
             emit("error", {"message": f"{type(e).__name__}: {e}"})
         finally:
+            _running.release()
             events.put(None)
 
     threading.Thread(target=worker, daemon=True).start()
