@@ -1,6 +1,7 @@
 """Command-line interface.
 
     testforge generate examples/calculator.py            # offline mock backend
+    testforge generate examples/calculator.py --llm ollama --model qwen2.5-coder:3b   # free, local
     testforge generate examples/calculator.py --llm claude
     testforge generate examples/calculator.py --no-planner --no-mutation-feedback   # ablation
     testforge mutate examples/calculator.py tests/test_calculator.py               # score any suite
@@ -17,6 +18,7 @@ from .config import Config
 from .core.analysis import analyze_file
 from .core.mutation import run_mutation_analysis
 from .core.runner import run_tests
+from .llm import LLMError
 from .orchestrator import Orchestrator, save_report
 
 
@@ -31,12 +33,17 @@ def _print_event(kind: str, data: dict) -> None:
 
 
 def cmd_generate(a: argparse.Namespace) -> int:
-    cfg = Config(llm=a.llm, model=a.model, effort=a.effort,
+    cfg = Config(llm=a.llm, model=a.model, effort=a.effort, ollama_host=a.ollama_host,
+                 num_ctx=a.num_ctx,
                  max_refine_iterations=a.max_iterations, target_mutation_score=a.target,
                  use_planner=not a.no_planner, use_fixer=not a.no_fixer,
                  use_mutation_feedback=not a.no_mutation_feedback,
                  mutation_workers=a.workers, max_mutants=a.max_mutants)
-    report = Orchestrator(cfg, on_event=_print_event).run(a.module)
+    try:
+        report = Orchestrator(cfg, on_event=_print_event).run(a.module)
+    except LLMError as e:
+        print(f"\nError: {e}", file=sys.stderr)
+        return 2
     name = Path(a.module).stem
     test_path, report_path = save_report(report, a.out, name)
     print("\n" + "=" * 60)
@@ -82,8 +89,11 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("generate", help="generate tests for a Python module")
     g.add_argument("module")
     g.add_argument("--out", default="generated_tests")
-    g.add_argument("--llm", choices=["mock", "claude"], default="mock")
-    g.add_argument("--model", default="claude-opus-5-5")
+    g.add_argument("--llm", choices=["mock", "ollama", "claude"], default="mock")
+    g.add_argument("--model", default=None,
+                   help="default: claude-opus-5-5 (claude), qwen2.5-coder:3b (ollama)")
+    g.add_argument("--ollama-host", default=None, help="default http://127.0.0.1:11434")
+    g.add_argument("--num-ctx", type=int, default=8192, help="Ollama context window")
     g.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
     g.add_argument("--max-iterations", type=int, default=3)
     g.add_argument("--target", type=float, default=0.9)

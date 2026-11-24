@@ -11,6 +11,7 @@ Usage:
     python experiments/run.py                          # mock baseline only
     python experiments/run.py --configs all --reps 3   # needs ANTHROPIC_API_KEY
     python experiments/run.py --modules examples --configs claude_full,claude_no_feedback
+    python experiments/run.py --configs ollama --ollama-model qwen2.5-coder:3b   # free, local
 
 Configurations that need the Claude API are skipped (with a warning) when no
 API key is set; results are never simulated.
@@ -47,6 +48,13 @@ CONFIGS: dict[str, Config] = {
     "claude_no_planner": replace(BASE, llm="claude", use_planner=False),
     "claude_no_fixer": replace(BASE, llm="claude", use_fixer=False),
     "claude_no_feedback": replace(BASE, llm="claude", use_mutation_feedback=False),
+    # The same design on a free local model (Ollama)
+    "ollama_single_shot": replace(BASE, llm="ollama", use_planner=False, use_fixer=False,
+                                  use_mutation_feedback=False),
+    "ollama_full": replace(BASE, llm="ollama"),
+    "ollama_no_planner": replace(BASE, llm="ollama", use_planner=False),
+    "ollama_no_fixer": replace(BASE, llm="ollama", use_fixer=False),
+    "ollama_no_feedback": replace(BASE, llm="ollama", use_mutation_feedback=False),
 }
 
 RUN_FIELDS = ["module", "config", "rep", "status", "stop_reason", "tests", "line_coverage",
@@ -131,12 +139,20 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--modules", default=str(ROOT / "examples"), help="folder of .py modules")
     p.add_argument("--configs", default="mock_baseline",
-                   help="comma-separated names, or 'all'. Available: " + ", ".join(CONFIGS))
+                   help="comma-separated names, 'all', 'claude' or 'ollama' (every config of that "
+                        "backend plus the mock baseline). Available: " + ", ".join(CONFIGS))
+    p.add_argument("--ollama-model", default=None, help="model for ollama_* configs")
+    p.add_argument("--claude-model", default=None, help="model for claude_* configs")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--out", default=str(ROOT / "results"))
     a = p.parse_args()
 
-    names = list(CONFIGS) if a.configs == "all" else [c.strip() for c in a.configs.split(",")]
+    if a.configs == "all":
+        names = list(CONFIGS)
+    elif a.configs in ("claude", "ollama"):
+        names = ["mock_baseline"] + [n for n in CONFIGS if CONFIGS[n].llm == a.configs]
+    else:
+        names = [c.strip() for c in a.configs.split(",")]
     unknown = [n for n in names if n not in CONFIGS]
     if unknown:
         p.error(f"unknown configuration(s): {unknown}")
@@ -148,6 +164,12 @@ def main() -> int:
     if not names:
         print("Nothing to run.", file=sys.stderr)
         return 1
+
+    for n in names:
+        if CONFIGS[n].llm == "ollama" and a.ollama_model:
+            CONFIGS[n] = replace(CONFIGS[n], model=a.ollama_model)
+        if CONFIGS[n].llm == "claude" and a.claude_model:
+            CONFIGS[n] = replace(CONFIGS[n], model=a.claude_model)
 
     modules = sorted(m for m in Path(a.modules).glob("*.py") if not m.name.startswith(("_", "test_")))
     out = Path(a.out)

@@ -33,7 +33,7 @@ class RunRequest(BaseModel):
     source: str = Field(min_length=1, max_length=200_000)
     module_name: str = "module_under_test"
     llm: str = "mock"
-    model: str = "claude-opus-5-5"
+    model: str | None = None
     effort: str = "high"
     max_refine_iterations: int = Field(3, ge=0, le=10)
     target_mutation_score: float = Field(0.9, ge=0, le=1)
@@ -58,8 +58,8 @@ def examples():
 def start_run(req: RunRequest):
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", req.module_name):
         raise HTTPException(400, "module_name must be a valid Python identifier")
-    if req.llm not in ("mock", "claude"):
-        raise HTTPException(400, "llm must be 'mock' or 'claude'")
+    if req.llm not in ("mock", "ollama", "claude"):
+        raise HTTPException(400, "llm must be 'mock', 'ollama' or 'claude'")
     run_id = uuid.uuid4().hex[:10]
     events: queue.Queue = queue.Queue()
     RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}
@@ -73,7 +73,7 @@ def start_run(req: RunRequest):
         work = Path(tempfile.mkdtemp(prefix="tf_web_"))
         path = work / f"{req.module_name}.py"
         path.write_text(req.source)
-        cfg = Config(llm=req.llm, model=req.model, effort=req.effort,
+        cfg = Config(llm=req.llm, model=(req.model or None), effort=req.effort,
                      max_refine_iterations=req.max_refine_iterations,
                      target_mutation_score=req.target_mutation_score,
                      use_planner=req.use_planner, use_fixer=req.use_fixer,

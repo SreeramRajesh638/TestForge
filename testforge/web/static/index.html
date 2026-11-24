@@ -75,7 +75,8 @@ svg text{fill:var(--muted);font-size:11px}
 
     <h2 style="margin-top:16px">2 · Settings</h2>
     <div class="row">
-      <label>Backend <select id="llm"><option value="mock">Mock (offline)</option><option value="claude">Claude API</option></select></label>
+      <label>Backend <select id="llm"><option value="mock">Mock (offline)</option><option value="ollama">Ollama (free, local)</option><option value="claude">Claude API</option></select></label>
+      <label>Model <input id="model" type="text" placeholder="default" size="18"></label>
       <label>Effort <select id="effort"><option>low</option><option>medium</option><option selected>high</option><option>xhigh</option></select></label>
       <label>Refine rounds <input id="iters" type="number" min="0" max="10" value="3" style="width:60px"></label>
       <label>Target <input id="target" type="number" min="0" max="1" step="0.05" value="0.9" style="width:70px"></label>
@@ -136,6 +137,9 @@ fetch("/api/examples").then(r => r.json()).then(list => {
 function pick(){ const e = examples.find(x => x.name === $("example").value);
   if (e){ $("source").value = e.source; $("modname").value = e.name; } }
 $("example").onchange = pick;
+const MODEL_HINT = {mock: "not used", ollama: "qwen2.5-coder:3b", claude: "claude-opus-5-5"};
+$("llm").onchange = () => { $("model").placeholder = MODEL_HINT[$("llm").value]; $("effort").disabled = $("llm").value !== "claude"; };
+$("llm").onchange();
 
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
@@ -153,7 +157,7 @@ $("run").onclick = async () => {
   $("run").disabled = true; $("status").textContent = "running…"; $("log").innerHTML = "";
   iterations = []; drawChart(); finalTests = "";
   for (const k of ["s-tests","s-line","s-branch","s-mut"]) $(k).textContent = "–";
-  const body = { source: $("source").value, module_name: $("modname").value.trim(), llm: $("llm").value,
+  const body = { source: $("source").value, module_name: $("modname").value.trim(), llm: $("llm").value, model: $("model").value.trim() || null,
     effort: $("effort").value, max_refine_iterations: +$("iters").value, target_mutation_score: +$("target").value,
     use_planner: $("planner").checked, use_fixer: $("fixer").checked, use_mutation_feedback: $("feedback").checked };
   const res = await fetch("/api/runs", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
@@ -208,7 +212,7 @@ function showReport(r){
     <tr><th>Input tokens</th><td>${r.total_input_tokens.toLocaleString()}</td></tr>
     <tr><th>Output tokens</th><td>${r.total_output_tokens.toLocaleString()}</td></tr>
     <tr><th>Estimated cost</th><td>$${r.cost_usd}</td></tr>
-    <tr><th>Backend</th><td>${esc(r.config.llm === "mock" ? "mock (offline)" : r.config.model)}</td></tr></table>`;
+    <tr><th>Backend</th><td>${esc(r.config.llm === "mock" ? "mock (offline)" : r.config.llm + " · " + r.config.model)}</td></tr></table>`;
 }
 $("copy").onclick = () => navigator.clipboard.writeText(finalTests);
 $("download").onclick = () => { const a = document.createElement("a");

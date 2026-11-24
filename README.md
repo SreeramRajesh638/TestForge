@@ -87,14 +87,42 @@ python experiments/run.py --configs all --reps 3   # all configurations (needs A
 | `claude_single_shot` | Plain LLM: one prompt, no planning, repair or feedback |
 | `claude_full` | The proposed multi-agent system |
 | `claude_no_planner` / `claude_no_fixer` / `claude_no_feedback` | Ablations: full system minus one agent |
+| `ollama_*` | The same five configurations on a free local model |
 
 Results go to `results/`: `runs.csv`, `iterations.csv` (per-round curves) and `summary.md` (mean ± std tables).
 
 ## Backends
 
-* `claude`: Anthropic Messages API, default model `claude-opus-5-5`, configurable effort.
-* `mock`: offline and deterministic. It calls the code in a sandboxed subprocess and records the results as
-  characterization tests. It lets the whole pipeline run without a key and serves as a **non-LLM baseline**.
+| Backend | Flag | Cost | Notes |
+|---|---|---|---|
+| Mock | `--llm mock` (default) | Free | Offline, no AI. Calls the code and records results as characterization tests; the **non-LLM baseline** |
+| Ollama | `--llm ollama` | Free | Open-weight models on your own machine. Default model `qwen2.5-coder:3b` |
+| Claude | `--llm claude` | Paid API | Anthropic Messages API, default model `claude-opus-5-5`, configurable effort |
+
+## Free local models with Ollama
+
+1. Install Ollama from https://ollama.com/download (it runs in the background after install).
+2. Download a model: `ollama pull qwen2.5-coder:3b`
+3. Generate tests: `testforge generate examples/calculator.py --llm ollama`
+
+On Windows, steps 2 and 3 are done by double-clicking `run_ollama_demo.bat`.
+
+Model sizes for a laptop with a 4 GB GPU and 8 GB RAM:
+
+| Model | Download | Speed | Quality |
+|---|---|---|---|
+| `qwen2.5-coder:1.5b` | ~1 GB | very fast | weak |
+| `qwen2.5-coder:3b` (default) | ~2 GB | fast, fits in 4 GB GPU memory | fair |
+| `qwen2.5-coder:7b` | ~4.7 GB | slow; close other apps | better |
+
+Use another model with `--model`, e.g. `--model qwen2.5-coder:7b`. Check https://ollama.com/library for newer coding models.
+If replies get cut off on long modules, raise the context window: `--num-ctx 16384` (uses more memory).
+
+Experiments with the local model:
+
+```bash
+python experiments/run.py --configs ollama --reps 3 --ollama-model qwen2.5-coder:3b
+```
 
 ## Project layout
 

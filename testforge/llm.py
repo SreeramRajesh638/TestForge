@@ -260,10 +260,84 @@ def _exc_ref(name: str) -> str:
     return name if hasattr(builtins, name) else f"m.{name}"
 
 
-def make_llm(kind: str, model: str = "claude-opus-5-5", effort: str = "high",
-             extra_paths: list[str] | None = None) -> LLM:
+# ==========================================================================
+# Ollama (free local models)
+# ==========================================================================
+class OllamaClient(LLM):
+    """Local open-weight models served by Ollama (https://ollama.com).
+
+    Uses Ollama's native /api/chat endpoint with ``format`` set to the JSON
+    schema, so even small models are constrained to valid structured output.
+    Replies that still fail validation are retried once with the error shown
+    to the model.
+    """
+
+    def __init__(self, model: str = "qwen2.5-coder:3b", host: str | None = None,
+                 num_ctx: int = 8192, timeout_s: int = 900, retries: int = 1) -> None:
+        super().__init__()
+        import os
+        self.model = model
+        self.host = (host or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434").rstrip("/")
+        if not self.host.startswith("http"):
+            self.host = "http://" + self.host
+        self.num_ctx = num_ctx
+        self.timeout_s = timeout_s
+        self.retries = retries
+
+    def _post(self, path: str, body: dict) -> dict:
+        import urllib.error
+        import urllib.request
+        req = urllib.request.Request(self.host + path, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:500]
+            if e.code == 404 and "not found" in detail:
+                raise LLMError(f"Ollama model '{self.model}' is not downloaded. "
+                               f"Run: ollama pull {self.model}") from e
+            raise LLMError(f"Ollama error {e.code}: {detail}") from e
+        except urllib.error.URLError as e:
+            raise LLMError(f"Cannot reach Ollama at {self.host}. Is Ollama running? ({e.reason})") from e
+        except TimeoutError as e:
+            raise LLMError(f"Ollama did not answer within {self.timeout_s}s") from e
+
+    def complete(self, role, system, prompt, schema, context=None):
+        from pydantic import ValidationError
+        messages = [{"role": "system", "content": system},
+                    {"role": "user", "content": prompt}]
+        last_error = ""
+        for _ in range(self.retries + 1):
+            data = self._post("/api/chat", {
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+                "format": schema.model_json_schema(),
+                # temperature 0 keeps runs as repeatable as a local model allows
+                "options": {"temperature": 0, "num_ctx": self.num_ctx},
+            })
+            self.usage.add(role, data.get("prompt_eval_count", 0), data.get("eval_count", 0))
+            text = (data.get("message") or {}).get("content", "")
+            try:
+                return schema.model_validate_json(text)
+            except ValidationError as e:
+                last_error = str(e)[:800]
+                messages += [{"role": "assistant", "content": text},
+                             {"role": "user", "content": "Your reply did not match the required JSON "
+                                                         f"schema:\n{last_error}\nReply again with valid JSON."}]
+        raise LLMError(f"{role}: Ollama reply did not match the schema: {last_error}")
+
+
+def make_llm(kind: str, model: str | None = None, effort: str = "high",
+             extra_paths: list[str] | None = None, **options) -> LLM:
+    from .config import DEFAULT_MODELS
+    model = model or DEFAULT_MODELS.get(kind)
     if kind == "claude":
         return ClaudeClient(model=model, effort=effort)
+    if kind == "ollama":
+        return OllamaClient(model=model, host=options.get("ollama_host"),
+                            num_ctx=options.get("num_ctx", 8192))
     if kind == "mock":
         return MockLLM(extra_paths=extra_paths)
     raise ValueError(f"unknown llm backend: {kind}")
