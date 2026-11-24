@@ -1,0 +1,20 @@
+{
+  "description": "TestForge evaluation benchmark: single-file, standard-library-only modules from open-source PyPI packages. Fetched at pinned versions and verified by SHA-256; not redistributed in this repository.",
+  "modules": [
+    {"name": "roman", "package": "roman", "version": "5.2", "path": "src/roman/__init__.py", "license": "ZPL-2.1", "domain": "number conversion", "sha256": "7d8962ca4ed71a67e0d07d0f6e81deb0f0b177565375d5ff39be1b1dc50e16f5"},
+    {"name": "inflection", "package": "inflection", "version": "0.5.1", "path": "inflection/__init__.py", "license": "MIT", "domain": "string inflection", "sha256": "3f2dfceedae1d0ff7399c238e70da02eb0c0a658e2f649ad1abe6cec36374c3f"},
+    {"name": "stringcase", "package": "stringcase", "version": "1.2.0", "path": "stringcase.py", "license": "MIT", "domain": "string case conversion", "sha256": "2056a07cbf392241dadf93beed105a4ae0d8d4f670ee940c571f97f16faa7274"},
+    {"name": "timeparse", "package": "pytimeparse", "version": "1.1.10", "path": "pytimeparse/timeparse.py", "license": "MIT", "domain": "parsing", "sha256": "8f0061ac8cc1a05cf2d2d76094e932fe6dfd6c793347366061fdb37768c5c39f"},
+    {"name": "filesize", "package": "hurry.filesize", "version": "0.9", "path": "src/hurry/filesize/filesize.py", "license": "ZPL-2.1", "domain": "formatting", "sha256": "1217c34131b7041c6e1a46f1866c2c9c9f581bc01242254e87409e8544d15ab7"},
+    {"name": "ordered_set", "package": "ordered-set", "version": "4.1.0", "path": "ordered_set/__init__.py", "license": "MIT", "domain": "data structure", "sha256": "cad6b380ab3204a8bdb85b41b7ddfcc97c50b5d6add55082ebcd6cf6cd0232a8"},
+    {"name": "docopt", "package": "docopt", "version": "0.6.2", "path": "docopt.py", "license": "MIT", "domain": "command-line parsing", "sha256": "44c650ebd833d852c8731fa3f0c5759506309622300e4c1954a540d78572cc54"},
+    {"name": "mathutils", "package": "boltons", "version": "26.2.0", "path": "boltons/mathutils.py", "license": "BSD-3-Clause", "domain": "math", "sha256": "c4f32563bb0a9281d5b7a3770c661e5a3ae3c6c3ae2644f5ff0a608edce2d5e6"},
+    {"name": "formatutils", "package": "boltons", "version": "26.2.0", "path": "boltons/formatutils.py", "license": "BSD-3-Clause", "domain": "string formatting", "sha256": "15c7963d5c97b11ec7a419e9e4aec7c20ca765bcf701306510c9c57c7eaeb1a4"},
+    {"name": "base58", "package": "base58", "version": "2.1.1", "path": "base58/__init__.py", "license": "MIT", "domain": "encoding", "sha256": "ec7bc75fe227f2f63f009206a8f621311ba26d8916344534ca2aae6a90832a9c"},
+    {"name": "isoweek", "package": "isoweek", "version": "1.3.3", "path": "isoweek.py", "license": "BSD", "domain": "dates", "sha256": "0682b1356b7d5307672baae8587cf43c927341f516ab769406534479e5be9945"},
+    {"name": "humps", "package": "pyhumps", "version": "3.8.0", "path": "humps/main.py", "license": "Unlicense", "domain": "string case conversion", "sha256": "d026ffe1c1642424f4195ed52b17569e802f32ebef664061181aa28adad7bb43"},
+    {"name": "baseconv", "package": "python-baseconv", "version": "1.2.2", "path": "baseconv.py", "license": "PSF", "domain": "number conversion", "sha256": "f0a34dea03dcda68221b6dc7ec3f110e5ca32f0c5a966f8c7651cc3ad6a0d5ae"},
+    {"name": "titlecase", "package": "titlecase", "version": "2.4.1", "path": "titlecase/__init__.py", "license": "MIT", "domain": "text processing", "sha256": "d00a7ab438dc481853d2c9f144387b2450c3b67ab4245b94fb43b8508b0f5baa"},
+    {"name": "toposort", "package": "toposort", "version": "1.10", "path": "src/toposort.py", "license": "Apache-2.0", "domain": "graph algorithm", "sha256": "54e9d07cb28d940a22b08ef2de176ad12c7cf90a4a4502e56c70ad83e32c570e"}
+  ]
+}

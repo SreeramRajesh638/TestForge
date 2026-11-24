@@ -91,6 +91,21 @@ python experiments/run.py --configs all --reps 3   # all configurations (needs A
 
 Results go to `results/`: `runs.csv`, `iterations.csv` (per-round curves) and `summary.md` (mean ± std tables).
 
+### Benchmark
+
+15 real modules (2,550 lines) from open-source PyPI packages: roman, inflection, stringcase, pytimeparse,
+hurry.filesize, ordered-set, docopt, boltons (mathutils, formatutils), base58, isoweek, pyhumps,
+python-baseconv, titlecase and toposort. They are not stored in this repository; `benchmark/fetch.py`
+downloads each at a pinned version and checks its SHA-256 (see `benchmark/manifest.json`).
+
+```bash
+python benchmark/fetch.py
+python experiments/run.py --modules benchmark/modules --configs mock_baseline
+```
+
+Running the benchmark executes this third-party code (all from well-known packages); do it on a
+machine where that is acceptable.
+
 ## Backends
 
 | Backend | Flag | Cost | Notes |
