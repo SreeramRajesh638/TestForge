@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.coverage
+generated_tests/
+results/
+*.egg-info/
+.venv/
+.env

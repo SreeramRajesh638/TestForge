@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "testforge"
+version = "0.1.0"
+description = "Autonomous multi-agent unit test generation with mutation-guided refinement"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=2.13",
+    "pydantic>=2.6",
+    "pytest>=8",
+    "coverage>=7.4",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
+[project.scripts]
+testforge = "testforge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["testforge*"]
+
+[tool.setuptools.package-data]
+"testforge.web" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
