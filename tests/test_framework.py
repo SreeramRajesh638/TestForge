@@ -122,3 +122,14 @@ def test_ablation_without_feedback_runs_single_iteration():
     cfg = Config(llm="mock", use_mutation_feedback=False, use_planner=False)
     report = Orchestrator(cfg).run(str(EXAMPLES / "calculator.py"))
     assert len(report.iterations) == 1 and report.stop_reason == "feedback_disabled"
+
+
+def test_experiment_configs_use_their_backends_default_model():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "run_experiments", Path(__file__).resolve().parent.parent / "experiments" / "run.py")
+    run = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(run)
+    from testforge.config import DEFAULT_MODELS
+    for name, cfg in run.CONFIGS.items():
+        assert cfg.model == DEFAULT_MODELS[cfg.llm], name

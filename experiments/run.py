@@ -64,6 +64,10 @@ CONFIGS: dict[str, Config] = {
     "ollama_no_feedback": replace(BASE, llm="ollama", use_mutation_feedback=False),
 }
 
+# BASE was built with the mock backend, so replace() would carry its model
+# name ("mock") into every config. Re-resolve each backend's default model.
+CONFIGS = {name: replace(cfg, model=None) for name, cfg in CONFIGS.items()}
+
 RUN_FIELDS = ["module", "config", "rep", "status", "stop_reason", "tests", "line_coverage",
               "branch_coverage", "mutation_score_initial", "mutation_score_final",
               "mutants_total", "mutants_equivalent", "refine_rounds", "input_tokens",
