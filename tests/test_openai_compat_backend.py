@@ -99,3 +99,14 @@ def test_retry_after_parsing():
     assert _retry_after({}, "Please try again in 1m2.5s") == pytest.approx(63.5)
     assert _retry_after({"retry-after": "4"}, "") == 4
     assert _retry_after({}, "no hint") == 20.0
+
+
+def test_service_side_json_failure_retries_then_uses_json_mode(server):
+    fail = (400, {"error": {"message": "Failed to validate JSON.", "code": "json_validate_failed"}})
+    FakeService.script = [fail, fail, ok(PLAN)]
+    c = client(server)
+    assert c.complete("planner", "s", "p", TestPlan).cases
+    kinds = [r["response_format"]["type"] for r in FakeService.requests]
+    assert kinds == ["json_schema", "json_schema", "json_object"]
+    assert c.schema_mode is True  # only that call fell back
+    assert FakeService.requests[0]["max_completion_tokens"] == 32768

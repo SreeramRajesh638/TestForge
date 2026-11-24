@@ -491,11 +491,15 @@ class OpenAICompatClient(LLM):
         from pydantic import ValidationError
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
         last_error = ""
-        for attempt in range(2):
-            body = {"model": self.model, "messages": messages, "temperature": 0}
+        use_schema = self.schema_mode
+        json_failures = 0
+        for attempt in range(4):
+            body = {"model": self.model, "messages": messages, "temperature": 0,
+                    # room for long test files after the model's reasoning
+                    "max_completion_tokens": 32768}
             if self.reasoning_effort in ("low", "medium", "high"):
                 body["reasoning_effort"] = self.reasoning_effort
-            if self.schema_mode:
+            if use_schema:
                 body["response_format"] = {"type": "json_schema", "json_schema": {
                     "name": schema.__name__, "schema": schema.model_json_schema(), "strict": True}}
             else:
@@ -506,9 +510,17 @@ class OpenAICompatClient(LLM):
             try:
                 data = self._post(body)
             except _HTTPStatus as e:
-                if e.code == 400 and self.schema_mode and ("response_format" in e.detail
-                                                           or "json_schema" in e.detail):
-                    self.schema_mode = False  # service can't do schemas: use JSON mode
+                if e.code == 400 and "json_validate_failed" in e.detail:
+                    # the service checked the reply against the schema and it failed:
+                    # retry once, then ask for plain JSON for this call
+                    json_failures += 1
+                    last_error = "service-side JSON validation failed"
+                    if json_failures >= 2:
+                        use_schema = False
+                    continue
+                if e.code == 400 and use_schema and ("response_format" in e.detail
+                                                     or "json_schema" in e.detail):
+                    self.schema_mode = use_schema = False  # service can't do schemas
                     continue
                 if e.code == 400 and "reasoning_effort" in e.detail:
                     self.reasoning_effort = None
