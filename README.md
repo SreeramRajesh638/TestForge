@@ -40,6 +40,9 @@ LLM agents use **structured outputs** (pydantic schemas), so the orchestrator ne
 2. Download this project (GitHub: **Code → Download ZIP**) and unzip it.
 3. Double-click `setup_windows.bat` (one time only).
 4. Double-click `run_dashboard.bat`; the dashboard opens in your browser.
+5. Optional, for free AI: create a key at https://console.groq.com (API Keys → Create API Key), save it
+   alone in a file named `groq_key.txt` in the project folder, restart `run_dashboard.bat` and choose
+   **Groq (free tier)** as the backend. `groq_key.txt` is git-ignored, so it is never uploaded.
 
 **macOS / Linux:** `bash setup_unix.sh`
 

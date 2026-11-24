@@ -7,3 +7,5 @@ results/
 .venv/
 .env
 benchmark/modules/
+groq_key.txt
+*_key.txt
