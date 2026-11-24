@@ -103,6 +103,17 @@ def run_one(module: Path, name: str, cfg: Config, rep: int) -> tuple[dict, list[
     return row, iters
 
 
+def save(out: Path, rows: list[dict], iters: list[dict]) -> None:
+    with open(out / "runs.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, RUN_FIELDS)
+        w.writeheader()
+        w.writerows({k: r.get(k, "") for k in RUN_FIELDS} for r in rows)
+    with open(out / "iterations.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, ITER_FIELDS)
+        w.writeheader()
+        w.writerows(iters)
+
+
 def _fmt(values: list[float], pct: bool = True) -> str:
     if not values:
         return "–"
@@ -204,15 +215,9 @@ def main() -> int:
                 score = row.get("mutation_score_final")
                 print(f"        {row['status']}" + (f" · mutation score {score:.0%}" if score is not None else "")
                       + (f" · {row['error']}" if row.get("error") else ""), flush=True)
+                save(out, rows, iters)  # keep finished runs even if the sweep is interrupted
 
-    with open(out / "runs.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, RUN_FIELDS)
-        w.writeheader()
-        w.writerows({k: r.get(k, "") for k in RUN_FIELDS} for r in rows)
-    with open(out / "iterations.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, ITER_FIELDS)
-        w.writeheader()
-        w.writerows(iters)
+    save(out, rows, iters)
     print("\n" + summarize(rows, out, a.reps))
     print(f"Results written to {out}/")
     return 0
