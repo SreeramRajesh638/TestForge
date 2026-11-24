@@ -18,12 +18,14 @@ MODEL_PRICES: dict[str, tuple[float, float]] = {
 }
 
 
-DEFAULT_MODELS = {"claude": "claude-opus-5-5", "ollama": "qwen2.5-coder:3b", "mock": "mock"}
+DEFAULT_MODELS = {"claude": "claude-opus-5-5", "ollama": "qwen2.5-coder:3b", "mock": "mock",
+                  "groq": "openai/gpt-oss-120b", "openrouter": "openai/gpt-oss-120b:free"}
 
 
 @dataclass
 class Config:
-    # LLM backend: "claude" (Anthropic API), "ollama" (free local models)
+    # LLM backend: "claude" (Anthropic API), "ollama" (free local models),
+    # "groq" / "openrouter" (OpenAI-compatible services with free tiers)
     # or "mock" (offline, no AI). model=None picks the backend's default.
     llm: str = "mock"
     model: str | None = None
@@ -59,5 +61,5 @@ class Config:
 
     def price(self) -> tuple[float, float]:
         if self.llm != "claude":
-            return (0.0, 0.0)  # mock and local Ollama models are free
+            return (0.0, 0.0)  # mock, local Ollama and free-tier services
         return MODEL_PRICES.get(self.model, (0.0, 0.0))

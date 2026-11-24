@@ -48,6 +48,13 @@ CONFIGS: dict[str, Config] = {
     "claude_no_planner": replace(BASE, llm="claude", use_planner=False),
     "claude_no_fixer": replace(BASE, llm="claude", use_fixer=False),
     "claude_no_feedback": replace(BASE, llm="claude", use_mutation_feedback=False),
+    # The same design on a free cloud model (Groq free tier; GROQ_API_KEY)
+    "groq_single_shot": replace(BASE, llm="groq", effort="medium", use_planner=False,
+                                use_fixer=False, use_mutation_feedback=False),
+    "groq_full": replace(BASE, llm="groq", effort="medium"),
+    "groq_no_planner": replace(BASE, llm="groq", effort="medium", use_planner=False),
+    "groq_no_fixer": replace(BASE, llm="groq", effort="medium", use_fixer=False),
+    "groq_no_feedback": replace(BASE, llm="groq", effort="medium", use_mutation_feedback=False),
     # The same design on a free local model (Ollama)
     "ollama_single_shot": replace(BASE, llm="ollama", use_planner=False, use_fixer=False,
                                   use_mutation_feedback=False),
@@ -149,13 +156,18 @@ def main() -> int:
 
     if a.configs == "all":
         names = list(CONFIGS)
-    elif a.configs in ("claude", "ollama"):
+    elif a.configs in ("claude", "ollama", "groq"):
         names = ["mock_baseline"] + [n for n in CONFIGS if CONFIGS[n].llm == a.configs]
     else:
         names = [c.strip() for c in a.configs.split(",")]
     unknown = [n for n in names if n not in CONFIGS]
     if unknown:
         p.error(f"unknown configuration(s): {unknown}")
+    if not os.environ.get("GROQ_API_KEY"):
+        skipped = [n for n in names if CONFIGS[n].llm == "groq"]
+        if skipped:
+            print(f"! GROQ_API_KEY not set - skipping {', '.join(skipped)}", file=sys.stderr)
+        names = [n for n in names if CONFIGS[n].llm != "groq"]
     if not os.environ.get("ANTHROPIC_API_KEY"):
         skipped = [n for n in names if CONFIGS[n].llm == "claude"]
         if skipped:

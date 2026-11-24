@@ -2,6 +2,7 @@
 
     testforge generate examples/calculator.py            # offline mock backend
     testforge generate examples/calculator.py --llm ollama --model qwen2.5-coder:3b   # free, local
+    testforge generate examples/calculator.py --llm groq --effort medium   # free tier, GROQ_API_KEY
     testforge generate examples/calculator.py --llm claude
     testforge generate examples/calculator.py --no-planner --no-mutation-feedback   # ablation
     testforge mutate examples/calculator.py tests/test_calculator.py               # score any suite
@@ -89,9 +90,10 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("generate", help="generate tests for a Python module")
     g.add_argument("module")
     g.add_argument("--out", default="generated_tests")
-    g.add_argument("--llm", choices=["mock", "ollama", "claude"], default="mock")
+    g.add_argument("--llm", choices=["mock", "ollama", "groq", "openrouter", "claude"], default="mock")
     g.add_argument("--model", default=None,
-                   help="default: claude-opus-5-5 (claude), qwen2.5-coder:3b (ollama)")
+                   help="default: claude-opus-5-5 (claude), qwen2.5-coder:3b (ollama), "
+                        "openai/gpt-oss-120b (groq)")
     g.add_argument("--ollama-host", default=None, help="default http://127.0.0.1:11434")
     g.add_argument("--num-ctx", type=int, default=8192, help="Ollama context window")
     g.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])

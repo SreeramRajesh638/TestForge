@@ -58,8 +58,8 @@ def examples():
 def start_run(req: RunRequest):
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", req.module_name):
         raise HTTPException(400, "module_name must be a valid Python identifier")
-    if req.llm not in ("mock", "ollama", "claude"):
-        raise HTTPException(400, "llm must be 'mock', 'ollama' or 'claude'")
+    if req.llm not in ("mock", "ollama", "groq", "openrouter", "claude"):
+        raise HTTPException(400, "llm must be one of mock, ollama, groq, openrouter, claude")
     run_id = uuid.uuid4().hex[:10]
     events: queue.Queue = queue.Queue()
     RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}

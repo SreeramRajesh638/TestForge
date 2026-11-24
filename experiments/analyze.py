@@ -31,7 +31,8 @@ MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
 
 ORDER = ["mock_baseline", "claude_single_shot", "claude_full", "claude_no_planner", "claude_no_fixer",
          "claude_no_feedback", "ollama_single_shot", "ollama_full", "ollama_no_planner",
-         "ollama_no_fixer", "ollama_no_feedback"]
+         "ollama_no_fixer", "ollama_no_feedback", "groq_single_shot", "groq_full",
+         "groq_no_planner", "groq_no_fixer", "groq_no_feedback"]
 LABELS = {
     "mock_baseline": "Non-LLM baseline", "claude_single_shot": "Claude, single prompt",
     "claude_full": "Claude, TestForge", "claude_no_planner": "Claude, no Planner",
@@ -39,6 +40,9 @@ LABELS = {
     "ollama_single_shot": "Local model, single prompt", "ollama_full": "Local model, TestForge",
     "ollama_no_planner": "Local model, no Planner", "ollama_no_fixer": "Local model, no Fixer",
     "ollama_no_feedback": "Local model, no feedback",
+    "groq_single_shot": "gpt-oss-120b, single prompt", "groq_full": "gpt-oss-120b, TestForge",
+    "groq_no_planner": "gpt-oss-120b, no Planner", "groq_no_fixer": "gpt-oss-120b, no Fixer",
+    "groq_no_feedback": "gpt-oss-120b, no feedback",
 }
 
 
@@ -278,7 +282,7 @@ def report(runs, iters, configs, directory: Path, figures: list[str]) -> str:
                  f"{mean_of('branch_coverage')} | {mean_of('tests', False)} | {mean_of('cost_usd', False)} |")
 
     pairs = []
-    for backend in ("claude", "ollama"):
+    for backend in ("claude", "ollama", "groq"):
         full = f"{backend}_full"
         if full in configs:
             pairs += [(full, c) for c in configs if c != full and (c.startswith(backend) or c == "mock_baseline")]
@@ -353,7 +357,7 @@ def main() -> int:
             name = f"feedback_gain_{c}.png"
             fig_gain(plt, runs, c, figdir / name)
             figures.append(name)
-    for backend in ("claude", "ollama"):
+    for backend in ("claude", "ollama", "groq"):
         if fig_ablation(plt, runs, backend, figdir / f"ablation_{backend}.png"):
             figures.append(f"ablation_{backend}.png")
     print(report(runs, iters, configs, directory, figures))

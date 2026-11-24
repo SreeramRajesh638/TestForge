@@ -417,12 +417,158 @@ class OllamaClient(LLM):
         raise LLMError(f"{role}: Ollama reply did not match the schema: {last_error}")
 
 
+# ==========================================================================
+# OpenAI-compatible services (Groq, OpenRouter, ...)
+# ==========================================================================
+PROVIDERS = {
+    # name: (base URL, API-key environment variable, default model)
+    "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
+    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openai/gpt-oss-120b:free"),
+}
+
+
+class OpenAICompatClient(LLM):
+    """Any service with an OpenAI-style /chat/completions endpoint.
+
+    Asks for a JSON-schema constrained reply (``response_format``); if the
+    service or model rejects that, falls back to plain JSON mode with the
+    schema written into the prompt. Free tiers have tight per-minute limits,
+    so HTTP 429 replies are waited out using the service's retry-after hint.
+    """
+
+    def __init__(self, provider: str = "groq", model: str | None = None, effort: str = "medium",
+                 base_url: str | None = None, api_key: str | None = None,
+                 timeout_s: int = 300, max_wait_s: int = 900) -> None:
+        super().__init__()
+        import os
+        default_url, key_env, default_model = PROVIDERS.get(provider, (None, "OPENAI_API_KEY", None))
+        self.provider = provider
+        self.base_url = (base_url or default_url or "").rstrip("/")
+        if not self.base_url:
+            raise LLMError(f"unknown provider '{provider}' and no base URL given")
+        self.api_key = api_key or os.environ.get(key_env)
+        if not self.api_key:
+            raise LLMError(f"Set the {key_env} environment variable to your {provider} API key")
+        self.model = model or default_model
+        # gpt-oss style reasoning models accept low | medium | high
+        self.reasoning_effort = {"xhigh": "high", "max": "high"}.get(effort, effort)
+        self.timeout_s = timeout_s
+        self.max_wait_s = max_wait_s
+        self.schema_mode = True  # switched off if the service rejects json_schema
+
+    def _post(self, body: dict) -> dict:
+        import time
+        import urllib.error
+        import urllib.request
+        waited = 0.0
+        while True:
+            req = urllib.request.Request(
+                self.base_url + "/chat/completions", data=json.dumps(body).encode(), method="POST",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}",
+                         "User-Agent": "testforge/0.1"})
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                    return json.loads(resp.read().decode())
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode(errors="replace")[:600]
+                if e.code == 429:
+                    delay = _retry_after(e.headers, detail)
+                    if waited + delay > self.max_wait_s:
+                        raise LLMError(f"{self.provider} rate limit: waited {waited:.0f}s, still limited. "
+                                       f"Free-tier daily quota may be used up. {detail}") from e
+                    time.sleep(delay)
+                    waited += delay
+                    continue
+                if e.code in (401, 403):
+                    raise LLMError(f"{self.provider} rejected the API key ({e.code}): {detail}") from e
+                if e.code == 413:
+                    raise LLMError(f"{self.provider}: request too large for this model/tier: {detail}") from e
+                raise _HTTPStatus(e.code, detail) from e
+            except urllib.error.URLError as e:
+                raise LLMError(f"Cannot reach {self.base_url}: {e.reason}") from e
+
+    def complete(self, role, system, prompt, schema, context=None):
+        from pydantic import ValidationError
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+        last_error = ""
+        for attempt in range(2):
+            body = {"model": self.model, "messages": messages, "temperature": 0}
+            if self.reasoning_effort in ("low", "medium", "high"):
+                body["reasoning_effort"] = self.reasoning_effort
+            if self.schema_mode:
+                body["response_format"] = {"type": "json_schema", "json_schema": {
+                    "name": schema.__name__, "schema": schema.model_json_schema(), "strict": True}}
+            else:
+                body["response_format"] = {"type": "json_object"}
+                body["messages"] = messages[:1] + [{"role": "user", "content": prompt +
+                    "\n\nReply with only a JSON object matching this JSON schema:\n" +
+                    json.dumps(schema.model_json_schema())}] + messages[2:]
+            try:
+                data = self._post(body)
+            except _HTTPStatus as e:
+                if e.code == 400 and self.schema_mode and ("response_format" in e.detail
+                                                           or "json_schema" in e.detail):
+                    self.schema_mode = False  # service can't do schemas: use JSON mode
+                    continue
+                if e.code == 400 and "reasoning_effort" in e.detail:
+                    self.reasoning_effort = None
+                    continue
+                raise LLMError(f"{self.provider} error {e.code}: {e.detail}") from e
+            usage = data.get("usage") or {}
+            self.usage.add(role, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+            choice = (data.get("choices") or [{}])[0]
+            if choice.get("finish_reason") == "length":
+                raise LLMError(f"{role}: reply truncated by {self.provider} (output limit)")
+            text = (choice.get("message") or {}).get("content") or ""
+            try:
+                return schema.model_validate_json(_strip_json(text))
+            except ValidationError as e:
+                last_error = str(e)[:800]
+                messages = messages + [{"role": "assistant", "content": text},
+                                       {"role": "user", "content": "That reply did not match the required "
+                                                                   f"JSON schema:\n{last_error}\nReply again with valid JSON."}]
+        raise LLMError(f"{role}: {self.provider} reply did not match the schema: {last_error}")
+
+
+class _HTTPStatus(Exception):
+    def __init__(self, code: int, detail: str) -> None:
+        super().__init__(f"{code}: {detail}")
+        self.code, self.detail = code, detail
+
+
+def _retry_after(headers, detail: str) -> float:
+    """Seconds to wait after a 429, from the Retry-After header or the message
+    ('Please try again in 7.66s' / '1m2.5s'), defaulting to 20s."""
+    import re
+    value = headers.get("retry-after") if headers else None
+    try:
+        if value:
+            return min(max(float(value), 1.0), 300.0)
+    except ValueError:
+        pass
+    m = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", detail)
+    if m:
+        return min(int(m.group(1) or 0) * 60 + float(m.group(2)) + 1.0, 300.0)
+    return 20.0
+
+
+def _strip_json(text: str) -> str:
+    """Remove markdown fences some models wrap around JSON."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else t
+        t = t.rsplit("```", 1)[0]
+    return t.strip()
+
+
 def make_llm(kind: str, model: str | None = None, effort: str = "high",
              extra_paths: list[str] | None = None, **options) -> LLM:
     from .config import DEFAULT_MODELS
     model = model or DEFAULT_MODELS.get(kind)
     if kind == "claude":
         return ClaudeClient(model=model, effort=effort)
+    if kind in PROVIDERS:
+        return OpenAICompatClient(provider=kind, model=model, effort=effort)
     if kind == "ollama":
         return OllamaClient(model=model, host=options.get("ollama_host"),
                             num_ctx=options.get("num_ctx", 8192))

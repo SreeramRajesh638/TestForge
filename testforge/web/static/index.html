@@ -75,7 +75,7 @@ svg text{fill:var(--muted);font-size:11px}
 
     <h2 style="margin-top:16px">2 · Settings</h2>
     <div class="row">
-      <label>Backend <select id="llm"><option value="mock">Mock (offline)</option><option value="ollama">Ollama (free, local)</option><option value="claude">Claude API</option></select></label>
+      <label>Backend <select id="llm"><option value="mock">Mock (offline)</option><option value="groq">Groq (free tier)</option><option value="ollama">Ollama (free, local)</option><option value="openrouter">OpenRouter</option><option value="claude">Claude API</option></select></label>
       <label>Model <input id="model" type="text" placeholder="default" size="18"></label>
       <label>Effort <select id="effort"><option>low</option><option>medium</option><option selected>high</option><option>xhigh</option></select></label>
       <label>Refine rounds <input id="iters" type="number" min="0" max="10" value="3" style="width:60px"></label>
@@ -137,8 +137,10 @@ fetch("/api/examples").then(r => r.json()).then(list => {
 function pick(){ const e = examples.find(x => x.name === $("example").value);
   if (e){ $("source").value = e.source; $("modname").value = e.name; } }
 $("example").onchange = pick;
-const MODEL_HINT = {mock: "not used", ollama: "qwen2.5-coder:3b", claude: "claude-opus-5-5"};
-$("llm").onchange = () => { $("model").placeholder = MODEL_HINT[$("llm").value]; $("effort").disabled = $("llm").value !== "claude"; };
+const MODEL_HINT = {mock: "not used", ollama: "qwen2.5-coder:3b", groq: "openai/gpt-oss-120b",
+  openrouter: "openai/gpt-oss-120b:free", claude: "claude-opus-5-5"};
+$("llm").onchange = () => { const v = $("llm").value; $("model").placeholder = MODEL_HINT[v];
+  $("effort").disabled = v === "mock" || v === "ollama"; };
 $("llm").onchange();
 
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
