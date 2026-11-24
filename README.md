@@ -35,6 +35,16 @@ LLM agents use **structured outputs** (pydantic schemas), so the orchestrator ne
 
 ## Install
 
+**Windows (easiest):**
+1. Install Python 3.12+ from https://www.python.org/downloads/ and tick **"Add Python to PATH"**.
+2. Download this project (GitHub: **Code → Download ZIP**) and unzip it.
+3. Double-click `setup_windows.bat` (one time only).
+4. Double-click `run_dashboard.bat`; the dashboard opens in your browser.
+
+**macOS / Linux:** `bash setup_unix.sh`
+
+**Manual:**
+
 ```bash
 pip install -e .
 ```
