@@ -64,6 +64,22 @@ Each `generate` run writes `generated_tests/test_<module>.py` and a JSON report
 with per-iteration metrics (tests, coverage, mutation score, tokens, cost, time)
 for the evaluation chapter.
 
+## Experiments
+
+```bash
+python experiments/run.py                          # offline baseline only
+python experiments/run.py --configs all --reps 3   # all configurations (needs ANTHROPIC_API_KEY)
+```
+
+| Configuration | Purpose |
+|---|---|
+| `mock_baseline` | Non-LLM baseline |
+| `claude_single_shot` | Plain LLM: one prompt, no planning, repair or feedback |
+| `claude_full` | The proposed multi-agent system |
+| `claude_no_planner` / `claude_no_fixer` / `claude_no_feedback` | Ablations: full system minus one agent |
+
+Results go to `results/`: `runs.csv`, `iterations.csv` (per-round curves) and `summary.md` (mean ± std tables).
+
 ## Backends
 
 * `claude`: Anthropic Messages API, default model `claude-opus-5-5`, configurable effort.
