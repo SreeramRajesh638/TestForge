@@ -1,198 +1,252 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TestForge UI Automation</title>
+<title>TestForge · UI automation</title>
+<link rel="stylesheet" href="/static/app.css">
 <style>
-:root{--bg:#f6f7f9;--panel:#fff;--text:#1b1f24;--muted:#5f6b7a;--border:#dde2e8;--accent:#2f6fde;--accent-soft:#e7effc;
-  --ok:#1f8a4c;--ok-soft:#e5f4eb;--bad:#c2362b;--bad-soft:#fbe9e7;--skip:#8a94a3;--code-bg:#f1f3f6}
-@media (prefers-color-scheme: dark){:root{--bg:#0f1216;--panel:#171b21;--text:#e6e9ed;--muted:#97a1ad;--border:#2a313a;
-  --accent:#6a9cf0;--accent-soft:#1d2a40;--ok:#4cc27e;--ok-soft:#14291d;--bad:#ef6b60;--bad-soft:#331a17;--skip:#6b7480;--code-bg:#11151a}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{padding:14px 24px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-header h1{margin:0;font-size:20px}
-nav{display:flex;gap:4px;flex-wrap:wrap}
-nav a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:7px;font-weight:500}
-nav a.on{background:var(--accent-soft);color:var(--text)}
-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:18px;padding:18px 24px;max-width:1500px;margin:0 auto}
-@media (max-width:980px){main{grid-template-columns:1fr;padding:16px}}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0}
-h2{margin:0 0 10px;font-size:15px}
-h3{margin:16px 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-input[type=search],input[type=number]{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:7px 10px;width:100%}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
-button{font:inherit;font-weight:600;border:0;border-radius:7px;padding:8px 14px;cursor:pointer;background:var(--accent);color:#fff}
-button.secondary{background:transparent;color:var(--accent);border:1px solid var(--border);font-weight:500}
-button:disabled{opacity:.5;cursor:default}
-.list{max-height:330px;overflow:auto;border:1px solid var(--border);border-radius:8px}
-.item{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border-bottom:1px solid var(--border)}
-.item:last-child{border-bottom:0}
-.item label{flex:1;cursor:pointer}
-.tag{display:inline-block;font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:0 7px;margin:2px 4px 0 0}
-.bug{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
-.muted{color:var(--muted)}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-@media (max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.stat{border:1px solid var(--border);border-radius:8px;padding:10px}
-.stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-.stat .k{color:var(--muted);font-size:12px}
-.progress{height:6px;background:var(--code-bg);border-radius:999px;overflow:hidden;margin-bottom:12px}
-.progress div{height:100%;background:var(--accent);width:0;transition:width .2s}
-.result{border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}
-.result summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer;list-style:none}
-.result summary::-webkit-details-marker{display:none}
-.badge{font-size:12px;font-weight:700;border-radius:999px;padding:1px 9px;white-space:nowrap}
-.badge.passed{background:var(--ok-soft);color:var(--ok)}
-.badge.failed,.badge.error{background:var(--bad-soft);color:var(--bad)}
-.result .name{flex:1;min-width:0}
-.result .body{padding:8px 12px 12px;border-top:1px solid var(--border)}
-.steps{margin:0;padding-left:20px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
-.steps li.passed::marker{color:var(--ok)}
-.steps li.failed{color:var(--bad)}
-.steps li.skipped{color:var(--skip)}
-.msg{white-space:pre-wrap;background:var(--bad-soft);color:var(--bad);border-radius:6px;padding:8px;font-size:12.5px;margin:8px 0}
-.shot{max-width:100%;border:1px solid var(--border);border-radius:6px;margin-top:6px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
-.empty{color:var(--muted);padding:24px;text-align:center;border:1px dashed var(--border);border-radius:8px}
-.hidden{display:none}
+.sc-list{max-height:330px;overflow:auto;border:1px solid var(--border);border-radius:10px}
+.sc{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer}
+.sc:last-child{border-bottom:0}
+.sc:hover{background:var(--panel-2)}
+.sc input{margin-top:3px;accent-color:var(--accent)}
+.sc .nm{font-weight:600;font-size:13px}
+.sc .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.sc .tags span{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:0 7px}
+.sc .st{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.sc .last{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;background:var(--border-2)}
+.sc .last.passed{background:var(--ok)} .sc .last.failed,.sc .last.error{background:var(--bad)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.bug-sw{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:7px 0;align-items:center;cursor:pointer;border-bottom:1px dashed var(--border)}
+.bug-sw:last-child{border-bottom:0}
+.bug-sw input{appearance:none;width:34px;height:20px;border-radius:999px;background:var(--border-2);position:relative;cursor:pointer;margin:0}
+.bug-sw input::after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .15s}
+.bug-sw input:checked{background:var(--bad)}
+.bug-sw input:checked::after{left:17px}
+.bug-sw b{font-family:var(--mono);font-size:12.5px}
+.bug-sw span{font-size:12.5px;color:var(--text-2)}
+.res{border:1px solid var(--border);border-radius:10px;margin-bottom:9px;background:var(--panel-2);overflow:hidden}
+.res summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none}
+.res summary::-webkit-details-marker{display:none}
+.res .nm{font-weight:600;font-size:13px}
+.res .body{border-top:1px solid var(--border);padding:10px 12px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px}
+@media (max-width:700px){.res .body{grid-template-columns:1fr}}
+.steps{list-style:none;margin:0;padding:0;font-family:var(--mono);font-size:12px}
+.steps li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;padding:3px 0;align-items:start}
+.steps li .s{font-weight:800}
+.steps li.passed .s{color:var(--ok)} .steps li.failed .s,.steps li.failed{color:var(--bad)} .steps li.skipped{color:var(--muted)}
+.steps .ms{color:var(--muted);font-size:11px}
+.msg{white-space:pre-wrap;background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:9px 11px;font-size:12.5px;margin:0 0 10px;font-family:var(--mono)}
+.thumb{width:220px;border-radius:8px;border:1px solid var(--border);cursor:zoom-in;display:block}
+.matrix{overflow:auto}
+.matrix table{font-size:12px;width:auto;min-width:100%}
+.matrix th.sc-h{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-weight:500;padding:8px 2px;color:var(--text-2)}
+.matrix td,.matrix th{padding:6px 3px}
+.matrix td.bugcol{white-space:nowrap;padding-right:12px}
+.matrix td.bugcol .muted{max-width:128px;overflow:hidden;text-overflow:ellipsis}
+.matrix td.cell{text-align:center}
+.matrix td.cell i{display:block;width:14px;height:14px;border-radius:4px;margin:auto;background:var(--panel-2);border:1px solid var(--border)}
+.matrix td.cell i.hit{background:var(--bad);border-color:var(--bad)}
+.matrix tr.missed td{background:var(--warn-soft)}
 </style>
 </head>
 <body>
-<header>
-  <h1>🧪 TestForge</h1>
-  <nav><a href="/">Unit test generation</a><a href="/automation" class="on">UI automation</a><a href="/demo" target="_blank" rel="noopener">Demo app ↗</a></nav>
-</header>
-<main>
-  <section class="panel">
-    <h2>Test scenarios</h2>
-    <input type="search" id="filter" placeholder="Search scenarios by name or tag (e.g. cart, form, negative)…" aria-label="Search scenarios">
-    <div class="row">
-      <button class="secondary" id="all">Select all</button>
-      <button class="secondary" id="none">Select none</button>
-      <span class="muted" id="selcount"></span>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--ok)"/><stop offset="1" stop-color="var(--accent)"/></linearGradient>
+</defs></svg>
+<div class="shell"><div class="main">
+<main class="content">
+  <div class="page-head">
+    <div>
+      <h1>UI test automation</h1>
+      <p>A Playwright engine runs keyword-driven scenarios against ShopLite. Inject bugs to prove the tests catch them.</p>
     </div>
-    <div class="list" id="scenarios"></div>
+    <div class="head-actions"><span class="badge b-muted" id="runState">Idle</span><span class="badge b-muted mono" id="timer">0:00</span></div>
+  </div>
 
-    <h3>Inject bugs into the demo app</h3>
-    <p class="muted" style="margin:0 0 6px">Tick bugs to break ShopLite on purpose, then run: good tests should fail.</p>
-    <div id="bugs"></div>
+  <div class="grid-2">
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><span class="step-num">1</span><h2>Scenarios</h2><span class="right small muted" id="selcount"></span></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+          <div class="search"><span id="searchIcon"></span><input type="search" id="filter" placeholder="Search scenarios…" aria-label="Search scenarios"></div>
+          <div class="chips" id="tagChips"></div>
+          <div style="display:flex;gap:8px"><button class="btn btn-ghost" id="all" style="padding:5px 11px;font-size:12.5px">Select visible</button>
+            <button class="btn btn-ghost" id="none" style="padding:5px 11px;font-size:12.5px">Clear visible</button></div>
+          <div class="sc-list" id="scenarios"></div>
+        </div>
+      </section>
 
-    <h3>Options</h3>
-    <div class="row"><label for="timeout" class="muted">Assertion timeout (ms)</label>
-      <input type="number" id="timeout" value="3000" min="500" max="30000" step="500" style="width:110px"></div>
+      <section class="card">
+        <div class="card-head"><span class="step-num">2</span><h2>Inject bugs into ShopLite</h2><span class="right badge b-muted" id="bugCount">0 active</span></div>
+        <div class="card-body" style="padding-top:6px" id="bugs"></div>
+      </section>
 
-    <div class="row">
-      <button id="run">▶ Run selected scenarios</button>
-      <button class="secondary" id="hunt" title="Inject each ticked bug (or all bugs) one at a time and check which scenarios catch it">🐞 Run bug hunt</button>
-      <button class="secondary" id="open">Open demo app ↗</button>
+      <section class="card">
+        <div class="card-head"><span class="step-num">3</span><h2>Run</h2></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+          <label class="field"><span class="range-head"><span>Assertion timeout</span><span class="range-val" id="toVal">3.0 s</span></span>
+            <input type="range" id="timeout" min="1000" max="10000" step="500" value="3000"></label>
+          <button class="btn btn-primary btn-lg" id="run"><span id="runIcon"></span><span id="runLabel">Run selected scenarios</span></button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost" id="hunt" style="flex:1" title="Inject each bug in turn and see which scenarios catch it"><span id="bugIcon"></span>Run bug hunt</button>
+            <button class="btn btn-ghost" id="open" style="flex:1">Open ShopLite ↗</button>
+          </div>
+        </div>
+      </section>
     </div>
-    <p class="muted" id="status"></p>
-  </section>
 
-  <section class="panel">
-    <h2>Results</h2>
-    <div class="stats">
-      <div class="stat"><div class="v" id="s-passed">–</div><div class="k">passed</div></div>
-      <div class="stat"><div class="v" id="s-failed">–</div><div class="k">failed</div></div>
-      <div class="stat"><div class="v" id="s-total">–</div><div class="k">scenarios</div></div>
-      <div class="stat"><div class="v" id="s-time">–</div><div class="k">time</div></div>
+    <div class="stack sticky-col">
+      <div class="kpis">
+        <div class="kpi gauge">
+          <svg class="ring" viewBox="0 0 66 66" aria-hidden="true"><circle class="bg" cx="33" cy="33" r="28"/>
+            <circle class="fg" id="ringFg" cx="33" cy="33" r="28" stroke-dasharray="175.93" stroke-dashoffset="175.93"/></svg>
+          <div style="min-width:0"><div class="k" id="k1l">Pass rate</div><div class="v" id="k1">–</div><div class="d" id="k1d">of selected scenarios</div></div>
+        </div>
+        <div class="kpi"><div class="k" id="k2l">Passed</div><div class="v" id="k2" style="color:var(--ok)">–</div><div class="d" id="k2d">&nbsp;</div></div>
+        <div class="kpi"><div class="k" id="k3l">Failed</div><div class="v" id="k3" style="color:var(--bad)">–</div><div class="d" id="k3d">&nbsp;</div></div>
+        <div class="kpi"><div class="k">Duration</div><div class="v" id="k4">–</div><div class="d">headless Chromium</div></div>
+        <div class="kpi"><div class="k">Bugs injected</div><div class="v" id="k5">0</div><div class="d" id="k5d">clean app</div></div>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+
+      <section class="card">
+        <div class="tabs">
+          <button class="on" data-tab="results">Scenario results <span class="count" id="c-res">0</span></button>
+          <button data-tab="matrix">Bug hunt matrix</button>
+        </div>
+        <div id="tab-results" class="card-body"><div id="results"><div class="empty-state"><div class="big">🧪</div>Select scenarios and press <b>Run selected scenarios</b>.</div></div></div>
+        <div id="tab-matrix" class="card-body hidden"><div id="matrix"><div class="empty-state"><div class="big">🐞</div>Press <b>Run bug hunt</b>: every bug is injected one at a time, and the matrix shows which scenarios catch it.</div></div></div>
+      </section>
     </div>
-    <div class="progress"><div id="bar"></div></div>
-    <div id="results"><div class="empty">Choose scenarios and press “Run selected scenarios”.</div></div>
-  </section>
+  </div>
 </main>
+</div></div>
+
+<script src="/static/app.js"></script>
 <script>
-const $ = id => document.getElementById(id);
-let scenarios = [], running = false;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+TF.shell("automation");
+const $ = id => document.getElementById(id), esc = TF.esc;
+let scenarios = [], bugs = [], activeTag = null, runStart = 0, timerId = null, lastStatus = {};
+$("searchIcon").innerHTML = TF.ICONS.search; $("runIcon").innerHTML = TF.ICONS.play; $("bugIcon").innerHTML = TF.ICONS.bug;
 
 async function load() {
   scenarios = await (await fetch("/api/ui/scenarios")).json();
-  $("scenarios").innerHTML = scenarios.map((s, i) => `
-    <div class="item" data-i="${i}" data-hay="${esc((s.name + " " + s.tags.join(" ")).toLowerCase())}">
-      <input type="checkbox" id="sc${i}" checked>
-      <label for="sc${i}">${esc(s.name)}<br>${s.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}
-        <span class="muted" style="font-size:12px">${s.steps.length} steps</span></label>
-    </div>`).join("");
-  $("scenarios").addEventListener("change", count);
-  const bugs = await (await fetch("/api/ui/bugs")).json();
-  $("bugs").innerHTML = bugs.map(b => `<label class="bug"><input type="checkbox" value="${esc(b.id)}">
-    <span><b>${esc(b.id)}</b> <span class="muted">${esc(b.description)}</span></span></label>`).join("");
+  bugs = await (await fetch("/api/ui/bugs")).json();
+  const tags = [...new Set(scenarios.flatMap(s => s.tags))].sort();
+  $("tagChips").innerHTML = `<button class="chip on" data-tag="">All</button>` + tags.map(t => `<button class="chip" data-tag="${esc(t)}">${esc(t)}</button>`).join("");
+  $("tagChips").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+    activeTag = c.dataset.tag || null; $("tagChips").querySelectorAll(".chip").forEach(x => x.classList.toggle("on", x === c)); applyFilter(); });
+  renderScenarios();
+  $("bugs").innerHTML = bugs.map(b => `<label class="bug-sw"><input type="checkbox" value="${esc(b.id)}"><div><b>${esc(b.id)}</b> <span>${esc(b.description)}</span></div></label>`).join("");
+  $("bugs").addEventListener("change", () => { const n = bugsSel().length; $("bugCount").textContent = n + " active"; $("bugCount").className = "right badge " + (n ? "b-bad" : "b-muted");
+    $("k5").textContent = n; $("k5d").textContent = n ? bugsSel().join(", ") : "clean app"; });
+}
+function renderScenarios() {
+  $("scenarios").innerHTML = scenarios.map((s, i) => `<label class="sc" data-i="${i}">
+    <input type="checkbox" checked><div><div class="nm">${esc(s.name)}</div><div class="tags">${s.tags.map(t => `<span>${esc(t)}</span>`).join("")}</div></div>
+    <span class="st"><i class="last ${lastStatus[s.name] || ""}"></i>${s.steps.length} steps</span></label>`).join("");
+  $("scenarios").addEventListener("change", count); applyFilter();
+}
+function applyFilter() {
+  const q = $("filter").value.trim().toLowerCase();
+  document.querySelectorAll("#scenarios .sc").forEach(el => {
+    const s = scenarios[+el.dataset.i], hay = (s.name + " " + s.tags.join(" ")).toLowerCase();
+    el.classList.toggle("hidden", (!!q && !hay.includes(q)) || (activeTag && !s.tags.includes(activeTag)));
+  });
   count();
 }
-function visibleItems() { return [...document.querySelectorAll("#scenarios .item")].filter(el => !el.classList.contains("hidden")); }
-function selected() { return [...document.querySelectorAll("#scenarios .item")].filter(el => el.querySelector("input").checked).map(el => scenarios[+el.dataset.i].name); }
-function bugsSel() { return [...document.querySelectorAll("#bugs input:checked")].map(x => x.value); }
+const visible = () => [...document.querySelectorAll("#scenarios .sc")].filter(el => !el.classList.contains("hidden"));
+const selected = () => [...document.querySelectorAll("#scenarios .sc")].filter(el => el.querySelector("input").checked).map(el => scenarios[+el.dataset.i].name);
+const bugsSel = () => [...document.querySelectorAll("#bugs input:checked")].map(x => x.value);
 function count() { $("selcount").textContent = `${selected().length} of ${scenarios.length} selected`; }
-
-$("filter").addEventListener("input", () => {
-  const q = $("filter").value.trim().toLowerCase();
-  document.querySelectorAll("#scenarios .item").forEach(el => el.classList.toggle("hidden", !!q && !el.dataset.hay.includes(q)));
-});
-$("all").onclick = () => { visibleItems().forEach(el => el.querySelector("input").checked = true); count(); };
-$("none").onclick = () => { visibleItems().forEach(el => el.querySelector("input").checked = false); count(); };
+$("filter").addEventListener("input", applyFilter);
+$("all").onclick = () => { visible().forEach(el => el.querySelector("input").checked = true); count(); };
+$("none").onclick = () => { visible().forEach(el => el.querySelector("input").checked = false); count(); };
+$("timeout").oninput = () => $("toVal").textContent = (+$("timeout").value / 1000).toFixed(1) + " s";
 $("open").onclick = () => { const b = bugsSel(); window.open("/demo" + (b.length ? "?bugs=" + b.join(",") : ""), "_blank", "noopener"); };
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(t) { document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === t));
+  for (const k of ["results", "matrix"]) $("tab-" + k).classList.toggle("hidden", k !== t); }
+
+function setState(text, cls) { $("runState").textContent = text; $("runState").className = "badge " + cls; }
+function tick() { const s = Math.floor((Date.now() - runStart) / 1000); $("timer").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+function busy(b) { $("run").disabled = $("hunt").disabled = b; }
+function ring(frac) { $("ringFg").style.strokeDashoffset = 175.93 * (1 - frac); }
+function labels(mode) {
+  const hunt = mode === "bughunt";
+  $("k1l").textContent = hunt ? "Detection rate" : "Pass rate"; $("k1d").textContent = hunt ? "of injected bugs caught" : "of selected scenarios";
+  $("k2l").textContent = hunt ? "Bugs caught" : "Passed"; $("k3l").textContent = hunt ? "Bugs missed" : "Failed";
+}
+
 $("run").onclick = () => start("run");
 $("hunt").onclick = () => start("bughunt");
-
-function setBusy(b, msg) { running = b; $("run").disabled = $("hunt").disabled = b; $("status").textContent = msg || ""; }
-function stats(p, f, t, ms) { $("s-passed").textContent = p; $("s-failed").textContent = f; $("s-total").textContent = t;
-  $("s-time").textContent = ms == null ? "–" : (ms / 1000).toFixed(1) + "s"; }
-
 async function start(mode) {
-  if (running) return;
   const names = selected();
-  if (!names.length) { $("status").textContent = "Select at least one scenario."; return; }
-  const body = {mode, names, bugs: bugsSel(), timeout_ms: +$("timeout").value || 3000};
-  setBusy(true, mode === "bughunt" ? "Bug hunt running: every bug is injected and all selected scenarios run against it…" : "Running in a real (headless) Chromium browser…");
-  $("results").innerHTML = ""; $("bar").style.width = "0"; stats("–", "–", names.length, null);
+  if (!names.length) { TF.toast("Select at least one scenario.", "bad"); return; }
+  const body = {mode, names, bugs: bugsSel(), timeout_ms: +$("timeout").value};
   const res = await fetch("/api/ui/runs", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-  if (!res.ok) { setBusy(false, "Error: " + (await res.json()).detail); return; }
+  if (!res.ok) { TF.toast(await TF.apiError(res), "bad"); return; }
   const {run_id} = await res.json();
-  let passed = 0, failed = 0, done = 0, total = names.length, huntRows = [], huntTotal = mode === "bughunt" ? (body.bugs.length || document.querySelectorAll("#bugs input").length) : 0;
+  busy(true); labels(mode); setState(mode === "bughunt" ? "Bug hunt running" : "Running", "b-acc");
+  runStart = Date.now(); tick(); timerId = setInterval(tick, 1000);
+  for (const k of ["k1", "k2", "k3", "k4"]) $(k).textContent = "–"; ring(0); $("bar").style.width = "0";
+  let passed = 0, failed = 0, done = 0, hunted = [];
+  const bugTotal = body.bugs.length || bugs.length;
+  if (mode === "run") { $("results").innerHTML = ""; $("c-res").textContent = "0"; showTab("results"); }
+  else { showTab("matrix"); $("matrix").innerHTML = `<div class="empty-state">Running the clean app first, then each bug…</div>`; }
   const es = new EventSource(`/api/runs/${run_id}/events`);
   es.onmessage = ev => {
     const {kind, data} = JSON.parse(ev.data);
-    if (kind === "scenario_start") { $("status").textContent = `Running ${data.index}/${data.total}: ${data.name}`; }
-    else if (kind === "scenario_done") {
+    if (mode === "run" && kind === "scenario_done") {
       done++; data.status === "passed" ? passed++ : failed++;
-      stats(passed, failed, total, null); $("bar").style.width = (100 * done / total) + "%";
+      lastStatus[data.name] = data.status;
+      $("k2").textContent = passed; $("k3").textContent = failed; $("k1").textContent = Math.round(100 * passed / done) + "%"; ring(passed / names.length);
+      $("bar").style.width = (100 * done / names.length) + "%"; $("c-res").textContent = done;
       $("results").insertAdjacentHTML("beforeend", resultHtml(data));
-    } else if (kind === "run_done") { stats(data.passed, data.failed, data.passed + data.failed, data.duration_ms); }
-    else if (kind === "bug_start") { $("status").textContent = `Injecting bug “${data.bug}” and running ${total} scenarios…`; }
-    else if (kind === "bug_done") {
-      huntRows.push(data); $("bar").style.width = (100 * huntRows.length / huntTotal) + "%";
-      $("results").innerHTML = huntHtml(huntRows, null);
+      $("results").lastElementChild.querySelector(".thumb")?.addEventListener("click", e => TF.lightbox(e.target.src));
+    } else if (kind === "run_done" && mode === "run") {
+      $("k4").textContent = (data.duration_ms / 1000).toFixed(1) + "s";
+      renderScenarios();
+    } else if (kind === "bug_done") {
+      hunted.push(data); $("bar").style.width = (100 * hunted.length / bugTotal) + "%";
+      $("matrix").innerHTML = matrixHtml(hunted, null, names);
     } else if (kind === "report" && data.mode === "bughunt") {
-      $("results").innerHTML = huntHtml(Object.entries(data.bugs).map(([bug, caught_by]) => ({bug, caught_by})), data);
-      stats(data.detected, data.total - data.detected, data.total, null);
-      $("s-passed").nextElementSibling.textContent = "bugs caught"; $("s-failed").nextElementSibling.textContent = "bugs missed";
-      $("s-total").nextElementSibling.textContent = "bugs injected";
-    } else if (kind === "error") { $("status").textContent = "⚠ " + data.message; }
+      const rows = Object.entries(data.bugs).map(([bug, caught_by]) => ({bug, caught_by}));
+      $("matrix").innerHTML = matrixHtml(rows, data, names);
+      $("k1").textContent = Math.round(100 * data.detection_rate) + "%"; ring(data.detection_rate);
+      $("k2").textContent = data.detected; $("k3").textContent = data.total - data.detected;
+      $("k4").textContent = Math.round((Date.now() - runStart) / 1000) + "s";
+    } else if (kind === "error") { TF.toast(data.message, "bad"); setState("Error", "b-bad"); }
   };
-  es.addEventListener("end", () => { es.close(); setBusy(false, "Finished."); if (mode === "run") resetLabels(); });
-  es.onerror = () => { es.close(); setBusy(false, "Connection lost."); };
+  const finish = () => { es.close(); clearInterval(timerId); busy(false);
+    if ($("runState").textContent !== "Error") setState("Finished", "b-ok"); };
+  es.addEventListener("end", finish);
+  es.onerror = () => { finish(); };
 }
-function resetLabels() { $("s-passed").nextElementSibling.textContent = "passed"; $("s-failed").nextElementSibling.textContent = "failed"; $("s-total").nextElementSibling.textContent = "scenarios"; }
 
 function resultHtml(r) {
-  const steps = r.steps.map(s => `<li class="${s.status}">${esc(s.description)} <span class="muted">${s.status === "skipped" ? "skipped" : s.duration_ms + " ms"}</span></li>`).join("");
-  return `<details class="result" ${r.status !== "passed" ? "open" : ""}>
-    <summary><span class="badge ${r.status}">${r.status.toUpperCase()}</span><span class="name">${esc(r.name)}</span>
-      <span class="muted">${(r.duration_ms / 1000).toFixed(2)}s</span></summary>
-    <div class="body">${r.message ? `<div class="msg">${esc(r.message)}</div>` : ""}<ol class="steps">${steps}</ol>
-      ${r.screenshot_png_b64 ? `<img class="shot" alt="Screenshot at the failing step" src="data:image/png;base64,${r.screenshot_png_b64}">` : ""}</div>
+  const ok = r.status === "passed";
+  const steps = r.steps.map(s => `<li class="${s.status}"><span class="s">${s.status === "passed" ? "✓" : s.status === "failed" ? "✕" : "·"}</span>
+    <span>${esc(s.description)}</span><span class="ms">${s.status === "skipped" ? "skipped" : s.duration_ms + " ms"}</span></li>`).join("");
+  return `<details class="res" ${ok ? "" : "open"}>
+    <summary><span class="badge ${ok ? "b-ok" : "b-bad"}">${ok ? "PASS" : "FAIL"}</span><span class="nm">${esc(r.name)}</span>
+      <span class="muted small mono">${(r.duration_ms / 1000).toFixed(2)}s</span></summary>
+    <div class="body"><div>${r.message ? `<div class="msg">${esc(r.message)}</div>` : ""}<ol class="steps">${steps}</ol></div>
+      ${r.screenshot_png_b64 ? `<div><img class="thumb" alt="Page at the failing step (click to enlarge)" src="data:image/png;base64,${r.screenshot_png_b64}">
+        <div class="muted small" style="margin-top:4px">Page at the failing step · click to enlarge</div></div>` : ""}</div>
   </details>`;
 }
-function huntHtml(rows, report) {
-  const head = report ? `<p><b>Bug detection rate: ${report.detected}/${report.total} (${Math.round(100 * report.detection_rate)}%)</b>
-    ${report.clean_failures.length ? `<br><span style="color:var(--bad)">Warning: ${report.clean_failures.length} scenario(s) already fail on the clean app.</span>` : " · all scenarios pass on the clean app"}</p>` : "";
-  return head + `<table><tr><th>Injected bug</th><th>Result</th><th>Caught by</th></tr>${rows.map(r => `<tr>
-    <td><b>${esc(r.bug)}</b></td><td><span class="badge ${r.caught_by.length ? "passed" : "failed"}">${r.caught_by.length ? "CAUGHT" : "MISSED"}</span></td>
-    <td>${r.caught_by.length ? r.caught_by.map(esc).join("<br>") : '<span class="muted">no scenario failed: add a test for this</span>'}</td></tr>`).join("")}</table>`;
+function matrixHtml(rows, report, names) {
+  const idx = names.map((n, i) => ({n, i: i + 1}));
+  const head = report ? `<p style="margin-top:0"><b>${report.detected} of ${report.total} bugs caught (${Math.round(100 * report.detection_rate)}%)</b>
+    ${report.clean_failures.length ? `<span class="badge b-bad">${report.clean_failures.length} scenario(s) already fail on the clean app</span>` : `<span class="badge b-ok">all scenarios pass on the clean app</span>`}</p>` : "";
+  return head + `<div class="matrix"><table><tr><th>Injected bug</th>${idx.map(x => `<th class="sc-h" title="${esc(x.n)}">${esc(x.n.length > 26 ? x.n.slice(0, 25) + "…" : x.n)}</th>`).join("")}<th></th></tr>
+    ${rows.map(r => `<tr class="${r.caught_by.length ? "" : "missed"}"><td class="bugcol" title="${esc((bugs.find(b => b.id === r.bug) || {}).description || "")}"><b class="mono">${esc(r.bug)}</b><div class="muted small">${esc((bugs.find(b => b.id === r.bug) || {}).description || "")}</div></td>
+      ${idx.map(x => `<td class="cell"><i class="${r.caught_by.includes(x.n) ? "hit" : ""}" title="${esc(x.n)}${r.caught_by.includes(x.n) ? ": caught" : ""}"></i></td>`).join("")}
+      <td>${r.caught_by.length ? `<span class="badge b-ok" title="caught by ${r.caught_by.length} scenario(s)">✓ ${r.caught_by.length}</span>` : `<span class="badge b-warn">MISSED</span>`}</td></tr>`).join("")}</table></div>
+    <p class="muted small">A red square means that scenario failed when the bug was injected: the test caught the bug.</p>`;
 }
 load();
 </script>

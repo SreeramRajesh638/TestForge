@@ -274,3 +274,50 @@ def start_ui_run(req: UIRunRequest):
 
     threading.Thread(target=worker, daemon=True).start()
     return {"run_id": run_id, "scenarios": len(scenarios)}
+
+
+# ======================================================================
+# Shared static assets and backend status (for the redesigned UI)
+# ======================================================================
+VENDOR_FILES = {"codemirror.js", "codemirror.css", "codemirror-python.js", "highlight.min.js",
+                "LICENSE-codemirror.txt", "LICENSE-highlightjs.txt"}
+
+
+@app.get("/static/{name}")
+def static_asset(name: str):
+    if name not in ("app.css", "app.js"):
+        raise HTTPException(404, "not found")
+    return FileResponse(STATIC / name)
+
+
+@app.get("/static/vendor/{name}")
+def vendor_asset(name: str):
+    if name not in VENDOR_FILES:
+        raise HTTPException(404, "not found")
+    return FileResponse(STATIC / "vendor" / name)
+
+
+@app.get("/api/status")
+def backend_status():
+    """Which LLM backends are ready, so the UI can show it before a run."""
+    import urllib.request
+    ollama_models: list[str] = []
+    ollama_up = False
+    try:
+        host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+        if not host.startswith("http"):
+            host = "http://" + host
+        with urllib.request.urlopen(host.rstrip("/") + "/api/tags", timeout=0.4) as r:
+            ollama_models = [m.get("name", "") for m in json.loads(r.read()).get("models", [])]
+            ollama_up = True
+    except Exception:
+        pass
+    return {
+        "mock": {"ready": True, "note": "offline, no AI"},
+        "groq": {"ready": bool(os.environ.get("GROQ_API_KEY")),
+                 "note": "key loaded" if os.environ.get("GROQ_API_KEY") else "no GROQ_API_KEY (groq_key.txt)"},
+        "ollama": {"ready": ollama_up, "models": ollama_models,
+                   "note": (f"{len(ollama_models)} model(s)" if ollama_up else "Ollama not running")},
+        "claude": {"ready": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                   "note": "key loaded" if os.environ.get("ANTHROPIC_API_KEY") else "no ANTHROPIC_API_KEY"},
+    }
