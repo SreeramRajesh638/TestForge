@@ -8,7 +8,9 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY testforge ./testforge
 COPY examples ./examples
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN pip install -e . \
+ && python -m playwright install --with-deps chromium \
  && useradd --create-home --uid 10001 testforge \
  && chown -R testforge /app
 USER testforge

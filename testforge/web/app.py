@@ -42,7 +42,7 @@ _running = threading.BoundedSemaphore(MAX_CONCURRENT_RUNS)
 async def password_gate(request: Request, call_next):
     """Require TESTFORGE_PASSWORD (if set) for everything except /healthz."""
     password = os.environ.get("TESTFORGE_PASSWORD")
-    if not password or request.url.path == "/healthz":
+    if not password or request.url.path in ("/healthz", "/demo"):
         return await call_next(request)
     header = request.headers.get("authorization", "")
     if header.lower().startswith("basic "):
@@ -54,6 +54,12 @@ async def password_gate(request: Request, call_next):
             return await call_next(request)
     return Response("Password required", status_code=401,
                     headers={"WWW-Authenticate": 'Basic realm="TestForge"'})
+
+
+@app.get("/demo")
+def demo_app():
+    """ShopLite: the sample app the UI automation engine tests."""
+    return FileResponse(STATIC / "shoplite.html")
 
 
 @app.get("/healthz")
@@ -156,3 +162,97 @@ def run_result(run_id: str):
     if run is None:
         raise HTTPException(404, "unknown run")
     return {"status": run["status"], "report": run["report"]}
+
+
+# ======================================================================
+# UI automation (Playwright engine against the ShopLite demo app)
+# ======================================================================
+SHOPLITE_BUGS = {
+    "search": "Search is case-sensitive",
+    "clear": "Clear button keeps the old results",
+    "cart": "Adding the same product again does not increase its quantity",
+    "total": "Cart total ignores quantities",
+    "remove": "Remove button removes the wrong product",
+    "email": "Email without @ is accepted",
+    "password": "Password mismatch is not detected",
+    "phone": "Phone numbers with 9 digits are accepted",
+    "terms": "Form can be submitted without accepting the terms",
+}
+
+
+class UIRunRequest(BaseModel):
+    names: list[str] | None = None        # scenarios to run; None = all
+    bugs: list[str] = []                  # bugs injected into the demo app
+    mode: str = "run"                     # "run" | "bughunt"
+    timeout_ms: int = Field(3000, ge=500, le=30000)
+
+
+@app.get("/automation")
+def automation_page():
+    return FileResponse(STATIC / "automation.html")
+
+
+@app.get("/api/ui/scenarios")
+def ui_scenarios():
+    from ..uiauto.engine import describe, load_scenarios
+    return [{"name": s["name"], "tags": s.get("tags", []),
+             "steps": [describe(st) for st in s["steps"]]} for s in load_scenarios()]
+
+
+@app.get("/api/ui/bugs")
+def ui_bugs():
+    return [{"id": k, "description": v} for k, v in SHOPLITE_BUGS.items()]
+
+
+def _internal_base_url() -> str:
+    """Where the engine's browser reaches this server. Always this server
+    itself (never a user-supplied URL), so the page cannot be used to make
+    the server browse arbitrary sites."""
+    return f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+
+
+@app.post("/api/ui/runs")
+def start_ui_run(req: UIRunRequest):
+    from ..uiauto.engine import bug_detection_matrix, filter_scenarios, load_scenarios, run_scenarios
+    if req.mode not in ("run", "bughunt"):
+        raise HTTPException(400, "mode must be 'run' or 'bughunt'")
+    unknown = [b for b in req.bugs if b not in SHOPLITE_BUGS]
+    if unknown:
+        raise HTTPException(400, f"unknown bugs: {unknown}")
+    scenarios = filter_scenarios(load_scenarios(), names=req.names)
+    if not scenarios:
+        raise HTTPException(400, "no scenarios selected")
+    if not _running.acquire(blocking=False):
+        raise HTTPException(429, f"{MAX_CONCURRENT_RUNS} runs are already in progress; try again shortly")
+    run_id = uuid.uuid4().hex[:10]
+    events: queue.Queue = queue.Queue()
+    RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}
+
+    def emit(kind: str, data: dict) -> None:
+        item = {"kind": kind, "data": data}
+        RUNS[run_id]["history"].append(item)
+        events.put(item)
+
+    def worker() -> None:
+        try:
+            base = _internal_base_url()
+            if req.mode == "bughunt":
+                bugs = req.bugs or list(SHOPLITE_BUGS)
+                report = bug_detection_matrix(base, scenarios, bugs, on_event=emit)
+            else:
+                report = run_scenarios(base, scenarios, bugs=req.bugs, timeout_ms=req.timeout_ms,
+                                       on_event=emit).to_dict()
+                for r in report["results"]:  # screenshots were already streamed
+                    r.pop("screenshot_png_b64", None)
+            RUNS[run_id]["report"] = report
+            RUNS[run_id]["status"] = "finished"
+            emit("report", {"mode": req.mode, **report})
+        except Exception as e:
+            RUNS[run_id]["status"] = "failed"
+            emit("error", {"message": f"{type(e).__name__}: {e}"})
+        finally:
+            _running.release()
+            events.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"run_id": run_id, "scenarios": len(scenarios)}

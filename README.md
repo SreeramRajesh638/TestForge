@@ -52,6 +52,38 @@ LLM agents use **structured outputs** (pydantic schemas), so the orchestrator ne
 pip install -e .
 ```
 
+## UI test automation
+
+Besides unit tests, TestForge has a **keyword-driven UI automation engine** built on Playwright.
+It ships with **ShopLite** (`/demo`), a sample shop with a search box, product buttons, a cart and a
+registration form with eight inputs, and 17 scenarios (`testforge/uiauto/scenarios/shoplite.json`)
+written as plain steps:
+
+```json
+{"action": "fill",  "target": "search-input", "value": "lamp"},
+{"action": "click", "target": "search-button"},
+{"action": "expect_text", "target": "results-count", "equals": "Showing 1 of 8 products"}
+```
+
+ShopLite can be broken on purpose (`/demo?bugs=search,total`, nine bugs available) to check that
+the scenarios catch real faults: the UI counterpart of mutation testing.
+
+* Dashboard: open **UI automation** in the top menu: search/select scenarios, tick bugs to inject,
+  then **Run selected scenarios** (live results with step details and a screenshot of every
+  failure) or **Run bug hunt** (each bug injected in turn; shows which scenarios catch it).
+* Command line:
+
+```bash
+testforge ui-test                       # run all scenarios against the built-in demo
+testforge ui-test --grep cart           # only scenarios whose name/tags contain "cart"
+testforge ui-test --bugs search,total   # inject bugs
+testforge ui-test --bug-hunt            # detection matrix for all nine bugs
+testforge ui-test --headed              # watch the browser
+testforge ui-test --url https://your-app.example --scenarios my_scenarios.json
+```
+
+First time only: `python -m playwright install chromium` (the Windows setup script does it).
+
 ## Run it on the web (free, with Render)
 
 TestForge runs the Python code you give it, so the web version is protected by a password.

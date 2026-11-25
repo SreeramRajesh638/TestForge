@@ -15,6 +15,7 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "matplotlib>=3.8",
+    "playwright>=1.45",
 ]
 
 [project.scripts]
@@ -25,6 +26,7 @@ include = ["testforge*"]
 
 [tool.setuptools.package-data]
 "testforge.web" = ["static/*"]
+"testforge.uiauto" = ["scenarios/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

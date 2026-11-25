@@ -76,8 +76,60 @@ def cmd_mutate(a: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_serve(a: argparse.Namespace) -> int:
+def _serve_in_background(port: int) -> None:
+    """Start the dashboard (which hosts the ShopLite demo) in a thread."""
+    import os
+    import threading
+    import time
+    import urllib.request
     import uvicorn
+    os.environ["PORT"] = str(port)
+    server = uvicorn.Server(uvicorn.Config("testforge.web.app:app", host="127.0.0.1", port=port,
+                                           log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    for _ in range(100):
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=1)
+            return
+        except Exception:
+            time.sleep(0.1)
+    raise RuntimeError("demo server did not start")
+
+
+def cmd_ui_test(a: argparse.Namespace) -> int:
+    from .uiauto.engine import bug_detection_matrix, filter_scenarios, load_scenarios, run_scenarios
+    base = a.url
+    if not base:
+        _serve_in_background(a.port)
+        base = f"http://127.0.0.1:{a.port}"
+    scenarios = filter_scenarios(load_scenarios(a.scenarios), query=a.grep or "")
+    if not scenarios:
+        print("No scenarios match.", file=sys.stderr)
+        return 1
+    bugs = [b for b in (a.bugs or "").split(",") if b]
+    if a.bug_hunt:
+        all_bugs = bugs or ["search", "clear", "cart", "total", "remove", "email", "password", "phone", "terms"]
+        m = bug_detection_matrix(base, scenarios, all_bugs,
+                                 on_event=lambda k, d: print(f"  injecting {d['bug']} ...") if k == "bug_start" else None)
+        for bug, by in m["bugs"].items():
+            print(f"{'CAUGHT' if by else 'MISSED':7s} {bug:10s} {'; '.join(by)}")
+        print(f"Bug detection rate: {m['detected']}/{m['total']}")
+        return 0 if not m["clean_failures"] else 1
+
+    def show(kind, d):
+        if kind == "scenario_done":
+            print(f"{'PASS' if d['status'] == 'passed' else 'FAIL'}  {d['name']}  ({d['duration_ms']} ms)")
+            if d["message"]:
+                print("      " + d["message"].replace("\n", "\n      "))
+    summary = run_scenarios(base, scenarios, bugs=bugs, headless=not a.headed, on_event=show)
+    print(f"\n{summary.passed} passed, {summary.failed} failed in {summary.duration_ms / 1000:.1f}s")
+    return 0 if summary.failed == 0 else 1
+
+
+def cmd_serve(a: argparse.Namespace) -> int:
+    import os
+    import uvicorn
+    os.environ["PORT"] = str(a.port)  # the UI automation engine browses this server
     uvicorn.run("testforge.web.app:app", host=a.host, port=a.port)
     return 0
 
@@ -111,6 +163,16 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("tests")
     m.add_argument("--workers", type=int, default=4)
     m.set_defaults(func=cmd_mutate)
+
+    u = sub.add_parser("ui-test", help="run the UI automation scenarios (Playwright)")
+    u.add_argument("--url", help="app base URL; default: start the built-in ShopLite demo")
+    u.add_argument("--scenarios", help="scenario JSON file; default: ShopLite scenarios")
+    u.add_argument("--grep", help="only scenarios whose name or tags contain this text")
+    u.add_argument("--bugs", help="comma-separated bugs to inject, e.g. search,total")
+    u.add_argument("--bug-hunt", action="store_true", help="inject each bug in turn; report which are caught")
+    u.add_argument("--headed", action="store_true", help="show the browser window")
+    u.add_argument("--port", type=int, default=8766)
+    u.set_defaults(func=cmd_ui_test)
 
     s = sub.add_parser("serve", help="start the web dashboard")
     s.add_argument("--host", default="127.0.0.1")

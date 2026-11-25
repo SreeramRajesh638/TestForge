@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopLite</title>
+<!--
+  ShopLite: a small sample web app used as the system under test for the
+  TestForge UI automation engine. Every interactive element has a stable
+  data-testid. Bugs can be injected on purpose with ?bugs=search,cart,...
+  (see BUG_CATALOG below) to check whether the automated tests catch them.
+-->
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--text:#1b1f24;--muted:#5f6b7a;--border:#dde2e8;--accent:#2f6fde;
+  --accent-soft:#e7effc;--ok:#1f8a4c;--ok-soft:#e5f4eb;--bad:#c2362b;--bad-soft:#fbe9e7;--warn:#9a6700;--warn-soft:#fff4d6}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1216;--panel:#171b21;--text:#e6e9ed;--muted:#97a1ad;--border:#2a313a;
+  --accent:#6a9cf0;--accent-soft:#1d2a40;--ok:#4cc27e;--ok-soft:#14291d;--bad:#ef6b60;--bad-soft:#331a17;--warn:#e0a84a;--warn-soft:#2e2412}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--border)}
+header h1{margin:0;font-size:20px}
+.cart-badge{background:var(--accent);color:#fff;border-radius:999px;padding:3px 12px;font-weight:600;font-size:14px}
+.bug-banner{background:var(--warn-soft);color:var(--warn);padding:8px 24px;font-size:13px;border-bottom:1px solid var(--border)}
+main{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;max-width:1200px;margin:0 auto;padding:18px 24px}
+@media (max-width:900px){main{grid-template-columns:1fr;padding:16px}}
+section.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0}
+h2{margin:0 0 12px;font-size:16px}
+.search-row{display:flex;gap:8px;flex-wrap:wrap}
+input,textarea,select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:8px 10px;min-width:0}
+input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+.search-row input{flex:1 1 200px}
+button{font:inherit;font-weight:600;border:0;border-radius:7px;padding:8px 14px;cursor:pointer;background:var(--accent);color:#fff}
+button.secondary{background:transparent;color:var(--accent);border:1px solid var(--border)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.muted{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:12px}
+.card{border:1px solid var(--border);border-radius:9px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.card .name{font-weight:600}
+.card .price{font-variant-numeric:tabular-nums}
+.empty{padding:18px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:9px;margin-top:12px}
+.cart-line{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
+.cart-line button{padding:4px 10px;font-size:13px}
+.total{display:flex;justify-content:space-between;font-weight:700;margin:10px 0}
+form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+@media (max-width:600px){form{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:4px}
+.field.wide{grid-column:1/-1}
+label{font-size:13px;color:var(--muted)}
+.error{color:var(--bad);font-size:12.5px;min-height:1em}
+.check{flex-direction:row;align-items:center;gap:8px}
+.actions{grid-column:1/-1;display:flex;gap:8px}
+.success{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:10px 12px;margin-top:12px;font-weight:600}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛍️ ShopLite</h1>
+  <span class="cart-badge">Cart: <span data-testid="cart-count">0</span></span>
+</header>
+<div class="bug-banner hidden" data-testid="bug-banner"></div>
+<main>
+  <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+    <section class="panel" aria-labelledby="products-h">
+      <h2 id="products-h">Products</h2>
+      <div class="search-row">
+        <input type="search" placeholder="Search products…" aria-label="Search products" data-testid="search-input">
+        <button data-testid="search-button">Search</button>
+        <button class="secondary" data-testid="clear-button">Clear</button>
+      </div>
+      <p class="muted" data-testid="results-count"></p>
+      <div class="grid" data-testid="product-grid"></div>
+      <div class="empty hidden" data-testid="no-results">No products found. Try another search.</div>
+    </section>
+
+    <section class="panel" aria-labelledby="reg-h">
+      <h2 id="reg-h">Create an account</h2>
+      <form data-testid="register-form" novalidate>
+        <div class="field"><label for="f-name">Full name</label>
+          <input id="f-name" data-testid="input-name" autocomplete="name"><span class="error" data-testid="error-name"></span></div>
+        <div class="field"><label for="f-email">Email</label>
+          <input id="f-email" type="email" data-testid="input-email" autocomplete="email"><span class="error" data-testid="error-email"></span></div>
+        <div class="field"><label for="f-phone">Phone (10 digits)</label>
+          <input id="f-phone" data-testid="input-phone" inputmode="numeric"><span class="error" data-testid="error-phone"></span></div>
+        <div class="field"><label for="f-age">Age</label>
+          <input id="f-age" type="number" data-testid="input-age"><span class="error" data-testid="error-age"></span></div>
+        <div class="field"><label for="f-pass">Password</label>
+          <input id="f-pass" type="password" data-testid="input-password" autocomplete="new-password"><span class="error" data-testid="error-password"></span></div>
+        <div class="field"><label for="f-confirm">Confirm password</label>
+          <input id="f-confirm" type="password" data-testid="input-confirm" autocomplete="new-password"><span class="error" data-testid="error-confirm"></span></div>
+        <div class="field wide"><label for="f-msg">Message (optional, max 200 characters)</label>
+          <textarea id="f-msg" rows="3" data-testid="input-message"></textarea><span class="error" data-testid="error-message"></span></div>
+        <div class="field wide check"><input id="f-terms" type="checkbox" data-testid="input-terms">
+          <label for="f-terms">I accept the terms</label><span class="error" data-testid="error-terms"></span></div>
+        <div class="actions">
+          <button type="submit" data-testid="register-submit">Register</button>
+          <button type="reset" class="secondary" data-testid="register-reset">Reset</button>
+        </div>
+      </form>
+      <div class="success hidden" data-testid="register-success" role="status"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="cart-h" style="align-self:start">
+    <h2 id="cart-h">Your cart</h2>
+    <div data-testid="cart-items"></div>
+    <p class="muted" data-testid="cart-empty">Your cart is empty.</p>
+    <div class="total"><span>Total</span><span data-testid="cart-total">$0.00</span></div>
+    <button data-testid="checkout-button" disabled>Checkout</button>
+    <div class="success hidden" data-testid="checkout-success" role="status">Order placed. Thank you!</div>
+  </section>
+</main>
+
+<script>
+// ---------------------------------------------------------------- bugs
+const BUG_CATALOG = {
+  search:   "Search is case-sensitive",
+  clear:    "Clear button keeps the old results",
+  cart:     "Adding the same product again does not increase its quantity",
+  total:    "Cart total ignores quantities",
+  remove:   "Remove button removes the wrong product",
+  email:    "Email without @ is accepted",
+  password: "Password mismatch is not detected",
+  phone:    "Phone numbers with 9 digits are accepted",
+  terms:    "Form can be submitted without accepting the terms",
+};
+const BUGS = new Set((new URLSearchParams(location.search).get("bugs") || "")
+  .split(",").map(s => s.trim()).filter(b => b in BUG_CATALOG));
+window.SHOPLITE_BUGS = [...BUGS];
+if (BUGS.size) {
+  const b = document.querySelector('[data-testid="bug-banner"]');
+  b.textContent = "Bug injection active: " + [...BUGS].map(k => BUG_CATALOG[k]).join(" · ");
+  b.classList.remove("hidden");
+}
+
+// ---------------------------------------------------------------- data
+const PRODUCTS = [
+  {id: "p1", name: "Desk Lamp",          category: "Home",        price: 24.99},
+  {id: "p2", name: "Wireless Mouse",     category: "Electronics", price: 19.50},
+  {id: "p3", name: "Mechanical Keyboard",category: "Electronics", price: 79.00},
+  {id: "p4", name: "Coffee Mug",         category: "Kitchen",     price: 8.75},
+  {id: "p5", name: "Notebook",           category: "Office",      price: 4.20},
+  {id: "p6", name: "USB-C Cable",        category: "Electronics", price: 9.99},
+  {id: "p7", name: "Water Bottle",       category: "Kitchen",     price: 15.00},
+  {id: "p8", name: "Desk Organizer",     category: "Office",      price: 21.30},
+];
+const $ = id => document.querySelector(`[data-testid="${id}"]`);
+const money = v => "$" + v.toFixed(2);
+
+// ---------------------------------------------------------------- search
+function renderProducts(list) {
+  const grid = $("product-grid");
+  grid.innerHTML = "";
+  for (const p of list) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.testid = `product-card-${p.id}`;
+    card.innerHTML = `<span class="name" data-testid="product-name-${p.id}"></span>
+      <span class="muted"></span><span class="price">${money(p.price)}</span>
+      <button data-testid="add-${p.id}">Add to cart</button>`;
+    card.querySelector(".name").textContent = p.name;
+    card.querySelector(".muted").textContent = p.category;
+    card.querySelector("button").onclick = () => addToCart(p.id);
+    grid.appendChild(card);
+  }
+  $("results-count").textContent = `Showing ${list.length} of ${PRODUCTS.length} products`;
+  $("no-results").classList.toggle("hidden", list.length > 0);
+}
+function search() {
+  const q = $("search-input").value.trim();
+  const match = BUGS.has("search")
+    ? p => p.name.includes(q) || p.category.includes(q)
+    : p => p.name.toLowerCase().includes(q.toLowerCase()) || p.category.toLowerCase().includes(q.toLowerCase());
+  renderProducts(q ? PRODUCTS.filter(match) : PRODUCTS);
+}
+$("search-button").onclick = search;
+$("search-input").addEventListener("keydown", e => { if (e.key === "Enter") search(); });
+$("clear-button").onclick = () => {
+  $("search-input").value = "";
+  if (!BUGS.has("clear")) renderProducts(PRODUCTS);
+};
+
+// ---------------------------------------------------------------- cart
+const cart = new Map(); // id -> quantity
+function addToCart(id) {
+  if (BUGS.has("cart") && cart.has(id)) return;
+  cart.set(id, (cart.get(id) || 0) + 1);
+  renderCart();
+}
+function removeFromCart(id) {
+  if (BUGS.has("remove")) id = [...cart.keys()][0];
+  cart.delete(id);
+  renderCart();
+}
+function renderCart() {
+  const box = $("cart-items");
+  box.innerHTML = "";
+  let count = 0, total = 0;
+  for (const [id, qty] of cart) {
+    const p = PRODUCTS.find(x => x.id === id);
+    count += qty;
+    total += BUGS.has("total") ? p.price : p.price * qty;
+    const line = document.createElement("div");
+    line.className = "cart-line";
+    line.dataset.testid = `cart-line-${id}`;
+    line.innerHTML = `<span><span class="n"></span> × <span data-testid="cart-qty-${id}">${qty}</span></span>
+      <button class="secondary" data-testid="remove-${id}">Remove</button>`;
+    line.querySelector(".n").textContent = p.name;
+    line.querySelector("button").onclick = () => removeFromCart(id);
+    box.appendChild(line);
+  }
+  $("cart-count").textContent = count;
+  $("cart-total").textContent = money(total);
+  $("cart-empty").classList.toggle("hidden", cart.size > 0);
+  $("checkout-button").disabled = cart.size === 0;
+  $("checkout-success").classList.add("hidden");
+}
+$("checkout-button").onclick = () => {
+  cart.clear(); renderCart();
+  $("checkout-success").classList.remove("hidden");
+};
+
+// ---------------------------------------------------------------- registration form
+function validate(v) {
+  const e = {};
+  if (v.name.trim().length < 2) e.name = "Enter your full name (at least 2 characters).";
+  const emailOk = BUGS.has("email") ? /^\S+\.\S+$/.test(v.email) : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email);
+  if (!emailOk) e.email = "Enter a valid email address.";
+  const digits = v.phone.replace(/\D/g, "");
+  if (!(BUGS.has("phone") ? digits.length >= 9 : /^\d{10}$/.test(v.phone.replace(/[\s-]/g, ""))))
+    e.phone = "Phone number must have exactly 10 digits.";
+  const age = Number(v.age);
+  if (!v.age || !Number.isInteger(age) || age < 18 || age > 120) e.age = "Age must be a whole number from 18 to 120.";
+  if (v.password.length < 8 || !/\d/.test(v.password)) e.password = "Password needs at least 8 characters and a number.";
+  if (!BUGS.has("password") && v.confirm !== v.password) e.confirm = "Passwords do not match.";
+  if (v.message.length > 200) e.message = "Message is too long (max 200 characters).";
+  if (!v.terms && !BUGS.has("terms")) e.terms = "You must accept the terms.";
+  return e;
+}
+const FIELDS = ["name", "email", "phone", "age", "password", "confirm", "message", "terms"];
+$("register-form").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const v = {};
+  for (const f of FIELDS) v[f] = f === "terms" ? $("input-terms").checked : $(`input-${f}`).value;
+  const errors = validate(v);
+  for (const f of FIELDS) $(`error-${f}`).textContent = errors[f] || "";
+  const ok = Object.keys(errors).length === 0;
+  const s = $("register-success");
+  s.classList.toggle("hidden", !ok);
+  if (ok) s.textContent = `Welcome, ${v.name.trim()}! Your account was created.`;
+});
+$("register-form").addEventListener("reset", () => {
+  for (const f of FIELDS) $(`error-${f}`).textContent = "";
+  $("register-success").classList.add("hidden");
+});
+
+renderProducts(PRODUCTS);
+renderCart();
+</script>
+</body>
+</html>

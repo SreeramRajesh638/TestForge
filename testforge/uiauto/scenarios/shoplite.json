@@ -1,0 +1,208 @@
+{
+  "app": "ShopLite",
+  "fragments": {
+    "fill_valid_form": [
+      {"action": "fill", "target": "input-name", "value": "Asha Kumar"},
+      {"action": "fill", "target": "input-email", "value": "asha@example.com"},
+      {"action": "fill", "target": "input-phone", "value": "9876543210"},
+      {"action": "fill", "target": "input-age", "value": "24"},
+      {"action": "fill", "target": "input-password", "value": "secret123"},
+      {"action": "fill", "target": "input-confirm", "value": "secret123"},
+      {"action": "fill", "target": "input-message", "value": "Hello from the automation engine"},
+      {"action": "check", "target": "input-terms"}
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "Search finds a product with a lower-case query",
+      "tags": ["search"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "fill", "target": "search-input", "value": "lamp"},
+        {"action": "click", "target": "search-button"},
+        {"action": "expect_text", "target": "results-count", "equals": "Showing 1 of 8 products"},
+        {"action": "expect_visible", "target": "product-card-p1"}
+      ]
+    },
+    {
+      "name": "Search by category with the Enter key",
+      "tags": ["search", "keyboard"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "fill", "target": "search-input", "value": "electronics"},
+        {"action": "press", "target": "search-input", "key": "Enter"},
+        {"action": "expect_text", "target": "results-count", "equals": "Showing 3 of 8 products"},
+        {"action": "expect_count", "selector": "[data-testid^='product-card-']", "count": 3}
+      ]
+    },
+    {
+      "name": "Search with no match shows a message",
+      "tags": ["search", "negative"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "fill", "target": "search-input", "value": "piano"},
+        {"action": "click", "target": "search-button"},
+        {"action": "expect_visible", "target": "no-results"},
+        {"action": "expect_text", "target": "results-count", "equals": "Showing 0 of 8 products"}
+      ]
+    },
+    {
+      "name": "Clear button restores all products",
+      "tags": ["search"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "fill", "target": "search-input", "value": "Mug"},
+        {"action": "click", "target": "search-button"},
+        {"action": "expect_text", "target": "results-count", "equals": "Showing 1 of 8 products"},
+        {"action": "click", "target": "clear-button"},
+        {"action": "expect_value", "target": "search-input", "equals": ""},
+        {"action": "expect_text", "target": "results-count", "equals": "Showing 8 of 8 products"}
+      ]
+    },
+    {
+      "name": "Adding a product updates the cart",
+      "tags": ["cart"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "expect_disabled", "target": "checkout-button"},
+        {"action": "click", "target": "add-p4"},
+        {"action": "expect_text", "target": "cart-count", "equals": "1"},
+        {"action": "expect_text", "target": "cart-total", "equals": "$8.75"},
+        {"action": "expect_enabled", "target": "checkout-button"}
+      ]
+    },
+    {
+      "name": "Adding the same product twice increases its quantity",
+      "tags": ["cart"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "click", "target": "add-p2"},
+        {"action": "click", "target": "add-p2"},
+        {"action": "expect_text", "target": "cart-qty-p2", "equals": "2"},
+        {"action": "expect_text", "target": "cart-count", "equals": "2"}
+      ]
+    },
+    {
+      "name": "Cart total counts quantities",
+      "tags": ["cart"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "click", "target": "add-p1"},
+        {"action": "click", "target": "add-p5"},
+        {"action": "click", "target": "add-p5"},
+        {"action": "expect_text", "target": "cart-total", "equals": "$33.39"}
+      ]
+    },
+    {
+      "name": "Remove deletes the chosen product",
+      "tags": ["cart"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "click", "target": "add-p1"},
+        {"action": "click", "target": "add-p4"},
+        {"action": "click", "target": "remove-p4"},
+        {"action": "expect_visible", "target": "cart-line-p1"},
+        {"action": "expect_hidden", "target": "cart-line-p4"},
+        {"action": "expect_text", "target": "cart-total", "equals": "$24.99"}
+      ]
+    },
+    {
+      "name": "Checkout empties the cart",
+      "tags": ["cart", "checkout"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "click", "target": "add-p6"},
+        {"action": "click", "target": "checkout-button"},
+        {"action": "expect_visible", "target": "checkout-success"},
+        {"action": "expect_text", "target": "cart-count", "equals": "0"},
+        {"action": "expect_disabled", "target": "checkout-button"}
+      ]
+    },
+    {
+      "name": "Valid registration succeeds",
+      "tags": ["form"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form"},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "register-success", "contains": "Welcome, Asha Kumar!"}
+      ]
+    },
+    {
+      "name": "Email without @ is rejected",
+      "tags": ["form", "negative"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form", "with": {"input-email": "asha.example.com"}},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-email", "equals": "Enter a valid email address."},
+        {"action": "expect_hidden", "target": "register-success"}
+      ]
+    },
+    {
+      "name": "Password mismatch is rejected",
+      "tags": ["form", "negative"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form", "with": {"input-confirm": "secret999"}},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-confirm", "equals": "Passwords do not match."},
+        {"action": "expect_hidden", "target": "register-success"}
+      ]
+    },
+    {
+      "name": "Weak password is rejected",
+      "tags": ["form", "negative"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form", "with": {"input-password": "abcdefgh", "input-confirm": "abcdefgh"}},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-password", "contains": "at least 8 characters"}
+      ]
+    },
+    {
+      "name": "Phone number with 9 digits is rejected",
+      "tags": ["form", "negative", "boundary"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form", "with": {"input-phone": "987654321"}},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-phone", "equals": "Phone number must have exactly 10 digits."}
+      ]
+    },
+    {
+      "name": "Age below 18 is rejected",
+      "tags": ["form", "negative", "boundary"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form", "with": {"input-age": "17"}},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-age", "contains": "18 to 120"}
+      ]
+    },
+    {
+      "name": "Terms must be accepted",
+      "tags": ["form", "negative"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"include": "fill_valid_form", "with": {"input-terms": null}},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-terms", "equals": "You must accept the terms."},
+        {"action": "expect_hidden", "target": "register-success"}
+      ]
+    },
+    {
+      "name": "Reset clears the form and its errors",
+      "tags": ["form"],
+      "steps": [
+        {"action": "goto", "path": "/demo"},
+        {"action": "click", "target": "register-submit"},
+        {"action": "expect_text", "target": "error-name", "contains": "full name"},
+        {"action": "fill", "target": "input-name", "value": "Temp"},
+        {"action": "click", "target": "register-reset"},
+        {"action": "expect_value", "target": "input-name", "equals": ""},
+        {"action": "expect_text", "target": "error-name", "equals": ""}
+      ]
+    }
+  ]
+}
