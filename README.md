@@ -52,6 +52,16 @@ LLM agents use **structured outputs** (pydantic schemas), so the orchestrator ne
 pip install -e .
 ```
 
+## Test your own code with mutations
+
+Hands-on guide: [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md) (tutorial files in `examples/tutorial/`).
+
+```bash
+testforge mutants mycode.py                    # list every mutant (bug) TestForge plants
+testforge mutants mycode.py --show 4           # see mutant 4 as a diff
+testforge mutate mycode.py test_mycode.py --all  # score YOUR tests: which mutants they catch
+```
+
 ## UI test automation
 
 Besides unit tests, TestForge has a **keyword-driven UI automation engine** built on Playwright.

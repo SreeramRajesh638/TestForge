@@ -143,3 +143,28 @@ def test_flattened_code_with_literal_newlines_is_restored():
     compile(fixed, "<t>", "exec")
     normal = "def test_b():\n    assert 'a\\nb'.count('\\n') == 1\n"
     assert strip_code_fences(normal) == normal  # valid code with escapes is left alone
+
+
+def test_tutorial_weak_and_strong_suites(capsys, monkeypatch):
+    from testforge.cli import main
+    tut = EXAMPLES / "tutorial"
+    monkeypatch.chdir(tut)
+    assert main(["mutate", "discount.py", "test_discount_weak.py"]) == 0
+    weak = capsys.readouterr().out
+    assert "Mutation score 45.5% (5/11)" in weak
+    assert main(["mutate", "discount.py", "test_discount_strong.py", "--all"]) == 0
+    strong = capsys.readouterr().out
+    assert "Mutation score 100.0% (11/11)" in strong and "survived" not in strong
+
+
+def test_mutants_command_lists_shows_and_writes(capsys, tmp_path):
+    import shutil
+    from testforge.cli import main
+    src = tmp_path / "discount.py"
+    shutil.copy(EXAMPLES / "tutorial" / "discount.py", src)
+    assert main(["mutants", str(src), "--operator", "ROR"]) == 0
+    assert "2 mutants" in capsys.readouterr().out
+    assert main(["mutants", str(src), "--show", "4"]) == 0
+    assert "+    if is_member and price > 100:" in capsys.readouterr().out
+    assert main(["mutants", str(src), "--write", "4"]) == 0
+    assert "price > 100" in (tmp_path / "discount_mutant4.py").read_text()

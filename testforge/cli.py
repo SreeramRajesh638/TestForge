@@ -71,8 +71,53 @@ def cmd_mutate(a: argparse.Namespace) -> int:
         return 1
     mut = run_mutation_analysis(info, code, workers=a.workers, extra_paths=extra)
     print(f"Mutation score {mut.score:.1%} ({mut.killed}/{mut.scored_total})")
-    for m in mut.survivors:
-        print("  survived", m.describe())
+    shown = mut.mutants if a.all else mut.survivors
+    if a.operator:
+        shown = [m for m in shown if m.operator in a.operator.upper().split(",")]
+    for m in shown:
+        print(f"  {m.status:9s}", m.describe())
+    if mut.survivors and not a.all:
+        print("\nSee any mutant's change with:  testforge mutants", a.module, "--show <id>")
+    return 0
+
+
+def cmd_mutants(a: argparse.Namespace) -> int:
+    """List the mutants of a module, show one as a diff, or write it to a file."""
+    import difflib
+    from .core.mutation import generate_mutants
+    info = analyze_file(a.module)
+    pairs = generate_mutants(info)
+    if a.operator:
+        wanted = a.operator.upper().split(",")
+        pairs = [(m, src) for m, src in pairs if m.operator in wanted]
+    if a.show is None and a.write is None:
+        counts: dict[str, int] = {}
+        for m, _ in pairs:
+            counts[m.operator] = counts.get(m.operator, 0) + 1
+        print(f"{len(pairs)} mutants in {a.module}: " +
+              ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        for m, _ in pairs:
+            print("  " + m.describe())
+        print(f"\nShow one:   testforge mutants {a.module} --show <id>"
+              f"\nWrite one:  testforge mutants {a.module} --write <id>   (creates <module>_mutant<id>.py)")
+        return 0
+    wanted_id = a.show if a.show is not None else a.write
+    match = next(((m, src) for m, src in pairs if m.id == wanted_id), None)
+    if match is None:
+        print(f"No mutant with id {wanted_id}", file=sys.stderr)
+        return 1
+    m, src = match
+    if a.write is not None:
+        out = Path(a.module).with_name(f"{Path(a.module).stem}_mutant{m.id}.py")
+        out.write_text(src)
+        print(f"Wrote {out} ({m.describe()})")
+        print("Note: the mutant is written in normalised form (comments removed).")
+        return 0
+    import ast
+    original = ast.unparse(ast.parse(info.source)).splitlines()
+    print(m.describe())
+    print("\n".join(difflib.unified_diff(original, src.splitlines(), "original", f"mutant {m.id}",
+                                         lineterm="", n=2)))
     return 0
 
 
@@ -162,7 +207,16 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("module")
     m.add_argument("tests")
     m.add_argument("--workers", type=int, default=4)
+    m.add_argument("--all", action="store_true", help="list every mutant with its status, not only survivors")
+    m.add_argument("--operator", help="only these operators, e.g. ROR,AOR")
     m.set_defaults(func=cmd_mutate)
+
+    mm = sub.add_parser("mutants", help="list the mutants of a module, show or write one")
+    mm.add_argument("module")
+    mm.add_argument("--show", type=int, metavar="ID", help="print mutant ID as a diff")
+    mm.add_argument("--write", type=int, metavar="ID", help="write mutant ID to <module>_mutant<ID>.py")
+    mm.add_argument("--operator", help="only these operators: AOR, ROR, LCR, UOI, CRP, RET, ASR")
+    mm.set_defaults(func=cmd_mutants)
 
     u = sub.add_parser("ui-test", help="run the UI automation scenarios (Playwright)")
     u.add_argument("--url", help="app base URL; default: start the built-in ShopLite demo")
