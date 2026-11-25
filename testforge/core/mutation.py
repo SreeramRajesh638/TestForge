@@ -182,7 +182,11 @@ def run_mutation_analysis(info: ModuleInfo, test_code: str, *, timeout_s: int = 
     pairs = generate_mutants(info, limit)
     known_equivalent = known_equivalent or set()
 
+    from .. import telemetry
+    run_id = telemetry.current_run()
+
     def evaluate(pair: tuple[Mutant, str]) -> Mutant:
+        telemetry.set_run(run_id)
         mutant, src = pair
         if (mutant.lineno, mutant.original, mutant.mutated) in known_equivalent:
             mutant.status = "equivalent"

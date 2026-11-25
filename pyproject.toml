@@ -25,7 +25,7 @@ testforge = "testforge.cli:main"
 include = ["testforge*"]
 
 [tool.setuptools.package-data]
-"testforge.web" = ["static/*", "static/vendor/*"]
+"testforge.web" = ["static/*", "static/vendor/*", "static/app/*", "static/app/assets/*"]
 "testforge.uiauto" = ["scenarios/*.json"]
 
 [tool.pytest.ini_options]

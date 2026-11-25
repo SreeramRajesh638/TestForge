@@ -29,6 +29,20 @@ def _env(work: Path, extra_paths: list[str] | None) -> dict:
 
 def run_tests(module_name: str, module_source: str, test_code: str, *,
               timeout_s: int = 60, extra_paths: list[str] | None = None) -> ExecResult:
+    """Execute ``test_code`` against ``module_source`` and measure coverage
+    (recorded as a telemetry event)."""
+    from .. import telemetry
+    with telemetry.span("pytest_run", "orchestrator", "pytest", module=module_name) as info:
+        res = _run_tests(module_name, module_source, test_code, timeout_s=timeout_s, extra_paths=extra_paths)
+        info["ok"] = res.collection_error is None
+        info["detail"] = (f"{res.passed}/{res.total} passed · line {res.line_coverage:.0%}"
+                          if res.collection_error is None else "collection error")
+        info["passed"], info["total"] = res.passed, res.total
+        return res
+
+
+def _run_tests(module_name: str, module_source: str, test_code: str, *,
+              timeout_s: int = 60, extra_paths: list[str] | None = None) -> ExecResult:
     """Execute ``test_code`` against ``module_source`` and measure coverage."""
     work = Path(tempfile.mkdtemp(prefix="tf_run_"))
     start = time.time()
@@ -105,6 +119,18 @@ def _coverage(work: Path, module_name: str) -> tuple[float, float]:
 
 
 def run_pytest_quick(work: Path, test_file: str, timeout_s: int,
+                     extra_paths: list[str] | None = None) -> str:
+    """Pass/fail run used for mutants (recorded as a telemetry event)."""
+    from .. import telemetry
+    with telemetry.span("mutant_run", "orchestrator", "mutation") as info:
+        status = _run_pytest_quick(work, test_file, timeout_s, extra_paths)
+        info["detail"] = {"pass": "mutant survived", "fail": "mutant killed",
+                          "timeout": "timeout (killed)"}.get(status, status)
+        info["ok"] = status != "error"
+        return status
+
+
+def _run_pytest_quick(work: Path, test_file: str, timeout_s: int,
                      extra_paths: list[str] | None = None) -> str:
     """Fast pass/fail run used for mutants. Returns 'pass' | 'fail' | 'timeout' | 'error'."""
     cmd = [sys.executable, "-m", "pytest", test_file, "-x", "-q", "--tb=no",

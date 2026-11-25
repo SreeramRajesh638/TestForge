@@ -270,6 +270,9 @@ def run_scenarios(base_url: str, scenarios: list[dict], *, bugs: list[str] | Non
                 ctx.close()
                 results.append(res)
                 emit("scenario_done", res.to_dict())
+                from .. import telemetry
+                telemetry.emit("ui_scenario", "orchestrator", "playwright", duration_ms=res.duration_ms,
+                               ok=res.status == "passed", detail=f"{res.status}: {res.name}")
         finally:
             browser.close()
     summary = RunSummary(base_url, bugs, results, int((time.monotonic() - start_all) * 1000))

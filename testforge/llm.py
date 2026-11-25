@@ -302,6 +302,11 @@ class MockLLM(LLM):
     CALL_TIMEOUT_S = 3.0
 
     def _probe(self, info, calls):
+        from . import telemetry
+        with telemetry.span("probe", "llm", "pytest", detail=f"{len(calls)} calls executed in sandbox"):
+            return self._probe_inner(info, calls)
+
+    def _probe_inner(self, info, calls):
         """Run the calls in a subprocess. A call that hangs (e.g. an infinite
         loop on some input) is recorded as {"timeout": True} and the probe is
         restarted with the calls after it."""

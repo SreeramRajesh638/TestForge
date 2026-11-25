@@ -19,6 +19,7 @@ import queue
 import re
 import tempfile
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -26,8 +27,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+from .. import telemetry
 from ..config import Config
 from ..orchestrator import Orchestrator
+from . import experiments as experiments_store
+from . import history
 
 STATIC = Path(__file__).parent / "static"
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
@@ -54,6 +58,23 @@ async def password_gate(request: Request, call_next):
             return await call_next(request)
     return Response("Password required", status_code=401,
                     headers={"WWW-Authenticate": 'Basic realm="TestForge"'})
+
+
+_UNTIMED = ("/api/telemetry/stream", "/healthz")
+
+
+@app.middleware("http")
+async def record_requests(request: Request, call_next):
+    """Record real API requests (method, path, status, latency) for the System Monitor."""
+    path = request.url.path
+    timed = path.startswith("/api/") and path not in _UNTIMED and not path.endswith("/events")
+    start = time.perf_counter()
+    response = await call_next(request)
+    if timed:
+        telemetry.emit("http", "browser", "server", duration_ms=(time.perf_counter() - start) * 1000,
+                       ok=response.status_code < 400, detail=f"{request.method} {path} → {response.status_code}",
+                       method=request.method, path=path, status=response.status_code)
+    return response
 
 
 @app.get("/demo")
@@ -99,9 +120,44 @@ def normalize_module_name(name: str) -> str:
     return n
 
 
+SPA = STATIC / "app"           # React build output (frontend/ → npm run build)
+SPA_ROUTES = ("/", "/automation", "/monitor", "/experiments", "/runs")
+
+
+def _spa_or(classic: str):
+    index = SPA / "index.html"
+    return FileResponse(index if index.exists() else STATIC / classic)
+
+
 @app.get("/")
 def index():
+    return _spa_or("index.html")
+
+
+@app.get("/monitor")
+@app.get("/experiments")
+@app.get("/runs")
+def spa_pages():
+    return _spa_or("index.html")
+
+
+@app.get("/app/assets/{name}")
+def spa_asset(name: str):
+    path = (SPA / "assets" / name).resolve()
+    if path.parent != (SPA / "assets").resolve() or not path.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(path)
+
+
+@app.get("/classic")
+def classic_index():
+    """The previous plain-HTML dashboard (kept as a fallback)."""
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/classic/automation")
+def classic_automation():
+    return FileResponse(STATIC / "automation.html")
 
 
 @app.get("/api/examples")
@@ -120,14 +176,18 @@ def start_run(req: RunRequest):
         raise HTTPException(429, f"{MAX_CONCURRENT_RUNS} runs are already in progress; try again shortly")
     run_id = uuid.uuid4().hex[:10]
     events: queue.Queue = queue.Queue()
+    started = time.time()
     RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}
 
     def emit(kind: str, data: dict) -> None:
-        item = {"kind": kind, "data": data}
+        item = {"kind": kind, "data": data, "t": round(time.time() - started, 3)}
         RUNS[run_id]["history"].append(item)
         events.put(item)
 
     def worker() -> None:
+        telemetry.set_run(run_id)
+        telemetry.emit("run", "server", "orchestrator", detail=f"generate · {req.module_name} · {req.llm}",
+                       phase="start", run_kind="generate")
         work = Path(tempfile.mkdtemp(prefix="tf_web_"))
         path = work / f"{req.module_name}.py"
         path.write_text(req.source, encoding="utf-8")
@@ -145,11 +205,28 @@ def start_run(req: RunRequest):
             RUNS[run_id]["status"] = "failed"
             emit("error", {"message": f"{type(e).__name__}: {e}"})
         finally:
+            status = RUNS[run_id]["status"]
+            telemetry.emit("run", "orchestrator", "server", duration_ms=(time.time() - started) * 1000,
+                           ok=status == "finished", detail=f"generate finished · {status}",
+                           phase="end", run_kind="generate")
+            _save_history(run_id, "generate", started, req.model_dump(), RUNS[run_id]["report"],
+                          status, history.summarize_generate)
+            telemetry.set_run(None)
             _running.release()
             events.put(None)
 
     threading.Thread(target=worker, daemon=True).start()
     return {"run_id": run_id}
+
+
+def _save_history(run_id, kind, started, request_dict, report, status, summarize) -> None:
+    try:
+        history.save({"id": run_id, "kind": kind, "started": started, "finished": time.time(),
+                      "request": request_dict, "report": report, "status": status,
+                      "summary": summarize(request_dict, report, status),
+                      "events": RUNS[run_id]["history"]})
+    except Exception as e:  # history is a convenience; never fail a run because of it
+        telemetry.emit("history", "server", "server", ok=False, detail=f"could not save run: {e}")
 
 
 @app.get("/api/runs/{run_id}/events")
@@ -207,7 +284,7 @@ class UIRunRequest(BaseModel):
 
 @app.get("/automation")
 def automation_page():
-    return FileResponse(STATIC / "automation.html")
+    return _spa_or("automation.html")
 
 
 @app.get("/api/ui/scenarios")
@@ -244,14 +321,18 @@ def start_ui_run(req: UIRunRequest):
         raise HTTPException(429, f"{MAX_CONCURRENT_RUNS} runs are already in progress; try again shortly")
     run_id = uuid.uuid4().hex[:10]
     events: queue.Queue = queue.Queue()
+    started = time.time()
     RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}
 
     def emit(kind: str, data: dict) -> None:
-        item = {"kind": kind, "data": data}
+        item = {"kind": kind, "data": data, "t": round(time.time() - started, 3)}
         RUNS[run_id]["history"].append(item)
         events.put(item)
 
     def worker() -> None:
+        telemetry.set_run(run_id)
+        telemetry.emit("run", "server", "orchestrator", detail=f"ui {req.mode} · {len(scenarios)} scenarios",
+                       phase="start", run_kind="ui")
         try:
             base = _internal_base_url()
             if req.mode == "bughunt":
@@ -269,6 +350,13 @@ def start_ui_run(req: UIRunRequest):
             RUNS[run_id]["status"] = "failed"
             emit("error", {"message": f"{type(e).__name__}: {e}"})
         finally:
+            status = RUNS[run_id]["status"]
+            telemetry.emit("run", "orchestrator", "server", duration_ms=(time.time() - started) * 1000,
+                           ok=status == "finished", detail=f"ui {req.mode} finished · {status}",
+                           phase="end", run_kind="ui")
+            _save_history(run_id, "ui", started, req.model_dump(), RUNS[run_id]["report"], status,
+                          history.summarize_ui)
+            telemetry.set_run(None)
             _running.release()
             events.put(None)
 
@@ -321,3 +409,80 @@ def backend_status():
         "claude": {"ready": bool(os.environ.get("ANTHROPIC_API_KEY")),
                    "note": "key loaded" if os.environ.get("ANTHROPIC_API_KEY") else "no ANTHROPIC_API_KEY"},
     }
+
+
+
+# ======================================================================
+# Telemetry, run history, experiments (React dashboard)
+# ======================================================================
+@app.get("/api/telemetry/snapshot")
+def telemetry_snapshot(limit: int = 200):
+    snap = telemetry.snapshot(limit=max(1, min(limit, 600)))
+    snap["active_runs"] = [{"id": k, "status": v["status"]} for k, v in RUNS.items() if v["status"] == "running"]
+    snap["max_runs"] = MAX_CONCURRENT_RUNS
+    return snap
+
+
+@app.get("/api/telemetry/stream")
+async def telemetry_stream():
+    q = telemetry.subscribe()
+
+    async def stream():
+        try:
+            yield "event: hello\ndata: {}\n\n"
+            idle = 0.0
+            while True:
+                try:
+                    ev = q.get_nowait()
+                    idle = 0.0
+                    yield f"data: {json.dumps(ev, default=str)}\n\n"
+                except queue.Empty:
+                    await asyncio.sleep(0.1)
+                    idle += 0.1
+                    if idle >= 15:  # keep proxies from closing an idle stream
+                        idle = 0.0
+                        yield ": keep-alive\n\n"
+        finally:
+            telemetry.unsubscribe(q)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/history")
+def history_list():
+    return history.list_runs()
+
+
+@app.get("/api/history/{run_id}")
+def history_get(run_id: str):
+    try:
+        rec = history.get(run_id)
+    except ValueError:
+        raise HTTPException(400, "bad run id")
+    if rec is None:
+        raise HTTPException(404, "unknown run")
+    return rec
+
+
+@app.delete("/api/history/{run_id}")
+def history_delete(run_id: str):
+    try:
+        if not history.delete(run_id):
+            raise HTTPException(404, "unknown run")
+    except ValueError:
+        raise HTTPException(400, "bad run id")
+    return {"deleted": run_id}
+
+
+@app.get("/api/experiments")
+def experiments_list():
+    return experiments_store.list_experiments()
+
+
+@app.get("/api/experiments/{name}")
+def experiments_get(name: str):
+    exp = experiments_store.load_experiment(name)
+    if exp is None:
+        raise HTTPException(404, "unknown experiment")
+    return exp

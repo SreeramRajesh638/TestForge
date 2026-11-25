@@ -18,6 +18,7 @@ from pathlib import Path
 from .agents.base import EventFn
 from .agents.team import (AnalyzerAgent, ExecutorAgent, FixerAgent, MutationCriticAgent,
                           PlannerAgent, WriterAgent)
+from . import telemetry
 from .agents import prompts
 from .config import Config
 from .core.budget import chunk_functions, estimate_tokens
@@ -47,6 +48,7 @@ class Orchestrator:
         extra_paths = [str(Path(path).resolve().parent)]
         llm = self._llm or make_llm(cfg.llm, cfg.model, cfg.effort, extra_paths,
                                       ollama_host=cfg.ollama_host, num_ctx=cfg.num_ctx)
+        telemetry.instrument_llm(llm)
         args = (llm, cfg, self.emit)
         analyzer, planner, writer = AnalyzerAgent(*args), PlannerAgent(*args), WriterAgent(*args)
         executor, fixer, critic = ExecutorAgent(*args), FixerAgent(*args), MutationCriticAgent(*args)

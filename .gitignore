@@ -9,3 +9,4 @@ results/
 benchmark/modules/
 groq_key.txt
 *_key.txt
+frontend/node_modules/

@@ -9,6 +9,33 @@ ones the tests missed. The loop repeats until the suite is strong enough.
 
 ![Dashboard](docs/dashboard.png)
 
+## Dashboard
+
+`testforge serve` (or `run_dashboard.bat`) opens a React dashboard at http://127.0.0.1:8000:
+
+| Page | What it shows |
+|---|---|
+| **Generate tests** | Code editor, backend/agent settings, live agent pipeline, score gauge and KPIs, activity timeline, generated tests, surviving-mutant diffs |
+| **UI automation** | Playwright scenarios against ShopLite, bug injection, step-by-step results with screenshots, bug × scenario matrix |
+| **System monitor** | Live architecture map (browser → API → orchestrator → AI model / test sandbox / mutation workers / Playwright). Every particle is a real request recorded by `testforge/telemetry.py`, with real latencies, plus an event stream |
+| **Experiments** | Thesis results read from `results/*/runs.csv`: per-configuration scores, refinement curves, per-module comparison |
+| **Runs** | Every run saved on the server: replay a run exactly as it happened, or compare two runs side by side |
+
+![React dashboard](docs/react/2_generate_done.png)
+
+Built with React, TypeScript, Tailwind CSS and Framer Motion (spring physics, shared-layout
+transitions, reduced-motion support). The built app is committed in `testforge/web/static/app`,
+so running TestForge needs **no Node.js**. To change the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173, proxies the API to testforge serve on :8000
+npm run build    # writes testforge/web/static/app
+```
+
+The previous plain-HTML dashboard is still available at `/classic`.
+
 ## How it works
 
 ```
