@@ -20,7 +20,7 @@ export interface Report {
 export interface RunEvent { kind: string; data: any; t?: number }
 
 export interface BackendStatus { ready: boolean; note: string; models?: string[] }
-export type StatusMap = Record<"mock" | "groq" | "ollama" | "claude", BackendStatus>;
+export type StatusMap = Record<"mock" | "groq" | "ollama" | "claude", BackendStatus> & { version?: string };
 
 export interface Example { name: string; source: string }
 

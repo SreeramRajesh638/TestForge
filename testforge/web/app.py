@@ -124,9 +124,12 @@ SPA = STATIC / "app"           # React build output (frontend/ → npm run build
 SPA_ROUTES = ("/", "/automation", "/monitor", "/experiments", "/runs")
 
 
+NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
+
 def _spa_or(classic: str):
     index = SPA / "index.html"
-    return FileResponse(index if index.exists() else STATIC / classic)
+    return FileResponse(index if index.exists() else STATIC / classic, headers=NO_CACHE)
 
 
 @app.get("/")
@@ -400,7 +403,9 @@ def backend_status():
             ollama_up = True
     except Exception:
         pass
+    from .. import __version__
     return {
+        "version": __version__,
         "mock": {"ready": True, "note": "offline, no AI"},
         "groq": {"ready": bool(os.environ.get("GROQ_API_KEY")),
                  "note": "key loaded" if os.environ.get("GROQ_API_KEY") else "no GROQ_API_KEY (groq_key.txt)"},

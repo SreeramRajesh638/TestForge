@@ -14,6 +14,15 @@ if exist groq_key.txt (
 ) else (
   echo No groq_key.txt found - the Groq backend will not work, the offline Mock backend will.
 )
+netstat -ano | findstr /R /C:"127.0.0.1:8000 .*LISTENING" /C:"0.0.0.0:8000 .*LISTENING" >nul
+if not errorlevel 1 (
+  echo.
+  echo Port 8000 is already in use: an older TestForge window is probably still open.
+  echo Close that window ^(or restart the computer^) and run this script again.
+  pause
+  exit /b 1
+)
 call .venv\Scripts\activate.bat
+echo Starting TestForge from %CD%
 start "" http://127.0.0.1:8000
 python -m testforge serve

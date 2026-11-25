@@ -19,12 +19,14 @@ const NAV: { to: string; label: string; icon: IconName; hint: string }[] = [
 ];
 
 function Brand() {
+  const { status } = useApp();
   return (
     <div className="flex items-center gap-3 px-2 pb-5 pt-1">
       <m.div whileHover={{ rotate: -8, scale: 1.06 }} transition={spring.bouncy}
         className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-accent to-accent-2 text-[17px] font-black text-white shadow-glow">T</m.div>
       <div className="leading-tight">
-        <div className="text-[15.5px] font-bold tracking-tight">TestForge</div>
+        <div className="flex items-center gap-2 text-[15.5px] font-bold tracking-tight">TestForge
+          {status?.version && <span className="rounded-md border border-line px-1.5 py-px font-mono text-[10.5px] font-semibold text-muted">v{status.version}</span>}</div>
         <div className="text-[11.5px] text-muted">Multi-agent test generation</div>
       </div>
     </div>
