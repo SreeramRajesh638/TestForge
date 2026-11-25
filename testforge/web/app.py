@@ -34,6 +34,17 @@ from . import experiments as experiments_store
 from . import history
 
 STATIC = Path(__file__).parent / "static"
+
+# Explicit content types for static files. On Windows, Python's mimetypes reads
+# the registry, which often maps .js to "text/plain"; browsers then refuse to
+# run the dashboard's JavaScript modules and the page stays blank.
+MEDIA_TYPES = {".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".html": "text/html",
+               ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png",
+               ".woff2": "font/woff2", ".woff": "font/woff", ".txt": "text/plain", ".map": "application/json"}
+
+
+def static_file(path: Path, **kwargs) -> FileResponse:
+    return FileResponse(path, media_type=MEDIA_TYPES.get(path.suffix.lower()), **kwargs)
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples"
 
 app = FastAPI(title="TestForge")
@@ -80,7 +91,7 @@ async def record_requests(request: Request, call_next):
 @app.get("/demo")
 def demo_app():
     """ShopLite: the sample app the UI automation engine tests."""
-    return FileResponse(STATIC / "shoplite.html")
+    return static_file(STATIC / "shoplite.html")
 
 
 @app.get("/healthz")
@@ -129,7 +140,7 @@ NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
 
 def _spa_or(classic: str):
     index = SPA / "index.html"
-    return FileResponse(index if index.exists() else STATIC / classic, headers=NO_CACHE)
+    return static_file(index if index.exists() else STATIC / classic, headers=NO_CACHE)
 
 
 @app.get("/")
@@ -149,18 +160,18 @@ def spa_asset(name: str):
     path = (SPA / "assets" / name).resolve()
     if path.parent != (SPA / "assets").resolve() or not path.is_file():
         raise HTTPException(404, "not found")
-    return FileResponse(path)
+    return static_file(path)
 
 
 @app.get("/classic")
 def classic_index():
     """The previous plain-HTML dashboard (kept as a fallback)."""
-    return FileResponse(STATIC / "index.html")
+    return static_file(STATIC / "index.html")
 
 
 @app.get("/classic/automation")
 def classic_automation():
-    return FileResponse(STATIC / "automation.html")
+    return static_file(STATIC / "automation.html")
 
 
 @app.get("/api/examples")
@@ -378,14 +389,14 @@ VENDOR_FILES = {"codemirror.js", "codemirror.css", "codemirror-python.js", "high
 def static_asset(name: str):
     if name not in ("app.css", "app.js"):
         raise HTTPException(404, "not found")
-    return FileResponse(STATIC / name)
+    return static_file(STATIC / name)
 
 
 @app.get("/static/vendor/{name}")
 def vendor_asset(name: str):
     if name not in VENDOR_FILES:
         raise HTTPException(404, "not found")
-    return FileResponse(STATIC / "vendor" / name)
+    return static_file(STATIC / "vendor" / name)
 
 
 @app.get("/api/status")

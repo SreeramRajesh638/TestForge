@@ -18,5 +18,15 @@ if exist groq_key.txt (
 set PORT=%~1
 if "%PORT%"=="" set PORT=8080
 call .venv\Scripts\activate.bat
+python -c "import testforge" 2>nul || (
+  echo TestForge is not installed in this folder. Run setup_windows.bat first.
+  pause
+  exit /b 1
+)
 echo Starting TestForge from %CD% (port %PORT%; the next free port is used if it is busy)
 python -m testforge serve --port %PORT% --open
+if errorlevel 1 (
+  echo.
+  echo TestForge stopped with an error - see the messages above.
+  pause
+)
