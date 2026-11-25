@@ -11,7 +11,9 @@ ones the tests missed. The loop repeats until the suite is strong enough.
 
 ## Dashboard
 
-`testforge serve` (or `run_dashboard.bat`) opens a React dashboard at http://127.0.0.1:8000:
+`testforge serve --open` (or `run_dashboard.bat`) opens a React dashboard at http://127.0.0.1:8080
+(another port: `testforge serve --port 9000`, or `run_dashboard.bat 9000`; if the port is busy,
+the next free one is used and printed):
 
 | Page | What it shows |
 |---|---|
@@ -30,7 +32,7 @@ so running TestForge needs **no Node.js**. To change the frontend:
 ```bash
 cd frontend
 npm install
-npm run dev      # http://localhost:5173, proxies the API to testforge serve on :8000
+npm run dev      # http://localhost:5173, proxies the API to testforge serve on :8080
 npm run build    # writes testforge/web/static/app
 ```
 
@@ -159,7 +161,7 @@ testforge generate examples/calculator.py --llm claude --no-mutation-feedback
 # Mutation-score any existing test suite (e.g. human-written tests, a Pynguin baseline)
 testforge mutate examples/calculator.py path/to/test_calculator.py
 
-# Web dashboard at http://127.0.0.1:8000
+# Web dashboard at http://127.0.0.1:8080
 testforge serve
 ```
 

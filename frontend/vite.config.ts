@@ -22,6 +22,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: { "/api": "http://127.0.0.1:8000", "/demo": "http://127.0.0.1:8000" },
+    proxy: { "/api": "http://127.0.0.1:8080", "/demo": "http://127.0.0.1:8080" },
   },
 });

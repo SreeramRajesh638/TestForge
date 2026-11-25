@@ -5,7 +5,7 @@ bar, press Enter, then run `.venv\Scripts\activate` once).
 
 ## Way 1: the dashboard (easiest)
 
-1. `testforge serve` (or double-click `run_dashboard.bat`) and open http://127.0.0.1:8000
+1. `testforge serve` (or double-click `run_dashboard.bat`) and open http://127.0.0.1:8080
 2. Paste your Python code into **Code under test** and give it a **Module name** (e.g. `mycode`).
 3. Choose a backend (Groq = free AI, Mock = no AI) and click **Generate tests**.
 4. Look at the **Surviving mutants** tab: each row is a planted bug the tests did not catch.

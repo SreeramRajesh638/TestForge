@@ -171,11 +171,42 @@ def cmd_ui_test(a: argparse.Namespace) -> int:
     return 0 if summary.failed == 0 else 1
 
 
+DEFAULT_PORT = 8080
+
+
+def _port_free(host: str, port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host if host not in ("0.0.0.0", "") else "127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
+def pick_port(host: str, wanted: int, tries: int = 20) -> int:
+    """``wanted`` if free, else the next free port (an older server may still
+    be running on it). Raises if none of the next ``tries`` ports is free."""
+    for port in range(wanted, wanted + tries):
+        if _port_free(host, port):
+            return port
+    raise SystemExit(f"No free port between {wanted} and {wanted + tries - 1}.")
+
+
 def cmd_serve(a: argparse.Namespace) -> int:
     import os
+    import threading
+    import webbrowser
     import uvicorn
-    os.environ["PORT"] = str(a.port)  # the UI automation engine browses this server
-    uvicorn.run("testforge.web.app:app", host=a.host, port=a.port)
+    port = a.port if a.strict_port else pick_port(a.host, a.port)
+    if port != a.port:
+        print(f"Port {a.port} is busy (an older TestForge may still be running): using port {port} instead.")
+    url = f"http://{'127.0.0.1' if a.host in ('0.0.0.0', '') else a.host}:{port}"
+    print(f"TestForge dashboard: {url}   (press Ctrl+C to stop)")
+    os.environ["PORT"] = str(port)  # the UI automation engine browses this server
+    if a.open:
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    uvicorn.run("testforge.web.app:app", host=a.host, port=port)
     return 0
 
 
@@ -230,7 +261,10 @@ def main(argv: list[str] | None = None) -> int:
 
     s = sub.add_parser("serve", help="start the web dashboard")
     s.add_argument("--host", default="127.0.0.1")
-    s.add_argument("--port", type=int, default=8000)
+    s.add_argument("--port", type=int, default=DEFAULT_PORT,
+                   help=f"default {DEFAULT_PORT}; if busy, the next free port is used")
+    s.add_argument("--strict-port", action="store_true", help="fail instead of picking another port")
+    s.add_argument("--open", action="store_true", help="open the dashboard in the browser")
     s.set_defaults(func=cmd_serve)
 
     a = p.parse_args(argv)

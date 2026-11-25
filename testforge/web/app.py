@@ -306,7 +306,7 @@ def _internal_base_url() -> str:
     """Where the engine's browser reaches this server. Always this server
     itself (never a user-supplied URL), so the page cannot be used to make
     the server browse arbitrary sites."""
-    return f"http://127.0.0.1:{os.environ.get('PORT', '8000')}"
+    return f"http://127.0.0.1:{os.environ.get('PORT', '8080')}"
 
 
 @app.post("/api/ui/runs")
