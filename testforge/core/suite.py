@@ -8,8 +8,29 @@ import re
 
 
 def strip_code_fences(text: str) -> str:
+    text = unescape_flattened_code(text)
     m = re.search(r"```(?:python)?\n(.*?)```", text, re.S)
     return (m.group(1) if m else text).strip() + "\n"
+
+
+def unescape_flattened_code(text: str) -> str:
+    """Some models return a whole file on one line with literal '\\n'
+    sequences (escaped twice inside the JSON reply). Restore the line breaks,
+    but only when that turns invalid code into valid code."""
+    if "\n" in text.strip() or "\\n" not in text:
+        return text
+    try:
+        ast.parse(text)
+        return text  # already valid as it is
+    except SyntaxError:
+        pass
+    fixed = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "    ")
+    fixed = fixed.replace('\\"', '"').replace("\\'", "'")
+    try:
+        ast.parse(fixed)
+        return fixed
+    except SyntaxError:
+        return text
 
 
 def _split(code: str) -> tuple[list[ast.stmt], list[ast.stmt], list[ast.stmt]]:

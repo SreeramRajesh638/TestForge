@@ -133,3 +133,13 @@ def test_experiment_configs_use_their_backends_default_model():
     from testforge.config import DEFAULT_MODELS
     for name, cfg in run.CONFIGS.items():
         assert cfg.model == DEFAULT_MODELS[cfg.llm], name
+
+
+def test_flattened_code_with_literal_newlines_is_restored():
+    from testforge.core.suite import strip_code_fences
+    flat = 'import pytest\\nfrom m import f\\n\\ndef test_a():\\n    assert f("x\\\\n") == 1\\n'
+    fixed = strip_code_fences(flat)
+    assert fixed.count("\n") >= 4 and "def test_a():" in fixed
+    compile(fixed, "<t>", "exec")
+    normal = "def test_b():\n    assert 'a\\nb'.count('\\n') == 1\n"
+    assert strip_code_fences(normal) == normal  # valid code with escapes is left alone
