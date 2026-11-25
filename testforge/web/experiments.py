@@ -10,7 +10,6 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
-from .history import data_dir
 
 NUMERIC = {"tests", "line_coverage", "branch_coverage", "mutation_score_initial", "mutation_score_final",
            "mutants_total", "mutants_equivalent", "refine_rounds", "input_tokens", "output_tokens",
@@ -18,7 +17,11 @@ NUMERIC = {"tests", "line_coverage", "branch_coverage", "mutation_score_initial"
 
 
 def results_root() -> Path:
-    return data_dir().parent
+    """Experiment results are only read, so they come from the repository's
+    results/ folder (or TESTFORGE_DATA_DIR) even where it is read-only."""
+    import os
+    base = os.environ.get("TESTFORGE_DATA_DIR")
+    return Path(base) if base else Path(__file__).resolve().parents[2] / "results"
 
 
 def _read(path: Path) -> list[dict]:

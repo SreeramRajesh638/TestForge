@@ -1,0 +1,12 @@
+# Not needed by either Vercel service
+.venv/
+venv/
+**/__pycache__/
+frontend/node_modules/
+frontend/dist/
+docs/
+benchmark/modules/
+results/dashboard_runs/
+generated_tests/
+*_key.txt
+groq_key.txt

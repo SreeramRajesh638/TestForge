@@ -14,9 +14,12 @@ dependencies = [
     "coverage>=7.4",
     "fastapi>=0.110",
     "uvicorn>=0.29",
-    "matplotlib>=3.8",
-    "playwright>=1.45",
 ]
+
+[project.optional-dependencies]
+ui = ["playwright>=1.45"]          # UI automation engine (needs a browser; not on serverless hosts)
+analysis = ["matplotlib>=3.8"]     # figures in experiments/analyze.py
+all = ["playwright>=1.45", "matplotlib>=3.8"]
 
 [project.scripts]
 testforge = "testforge.cli:main"

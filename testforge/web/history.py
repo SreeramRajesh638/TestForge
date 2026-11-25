@@ -17,11 +17,23 @@ _lock = threading.Lock()
 
 
 def data_dir() -> Path:
+    """Where saved runs go: TESTFORGE_DATA_DIR, else <repo>/results. If that is
+    read-only (e.g. a Vercel function), fall back to the temp directory: runs
+    then live only as long as that instance."""
+    import tempfile
     base = os.environ.get("TESTFORGE_DATA_DIR")
-    root = Path(base) if base else Path(__file__).resolve().parents[2] / "results"
-    d = root / "dashboard_runs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    for root in ([Path(base)] if base else [Path(__file__).resolve().parents[2] / "results",
+                                            Path(tempfile.gettempdir()) / "testforge"]):
+        d = root / "dashboard_runs"
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            probe = d / ".write_test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            return d
+        except OSError:
+            continue
+    raise OSError("no writable directory for run history; set TESTFORGE_DATA_DIR")
 
 
 def _path(run_id: str) -> Path:

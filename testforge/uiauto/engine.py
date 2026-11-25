@@ -230,8 +230,12 @@ def run_scenarios(base_url: str, scenarios: list[dict], *, bugs: list[str] | Non
                   headless: bool = True, timeout_ms: int = 3000,
                   on_event: EventFn | None = None, viewport=(1280, 900)) -> RunSummary:
     """Run each scenario in a fresh browser context (isolated cookies/state)."""
-    from playwright.sync_api import Error as PlaywrightError
-    from playwright.sync_api import sync_playwright
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:  # optional dependency (not installed on e.g. Vercel)
+        raise RuntimeError("UI automation needs Playwright: pip install -e \".[ui]\" "
+                           "&& python -m playwright install chromium") from e
 
     emit = on_event or (lambda kind, data: None)
     bugs = list(bugs or [])

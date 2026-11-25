@@ -78,7 +78,7 @@ LLM agents use **structured outputs** (pydantic schemas), so the orchestrator ne
 **Manual:**
 
 ```bash
-pip install -e .
+pip install -e ".[all]"   # or just: pip install -e .  (no UI automation / figures)
 ```
 
 ## Test your own code with mutations

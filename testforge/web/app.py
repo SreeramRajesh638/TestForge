@@ -314,9 +314,17 @@ def ui_bugs():
 
 
 def _internal_base_url() -> str:
-    """Where the engine's browser reaches this server. Always this server
-    itself (never a user-supplied URL), so the page cannot be used to make
-    the server browse arbitrary sites."""
+    """Where the engine's browser reaches this server's /demo page. Always this
+    deployment itself (never a user-supplied URL), so the page cannot be used to
+    make the server browse arbitrary sites.
+
+    * local / Docker: the port this server listens on (set by `testforge serve`)
+    * Vercel: functions have no fixed local port, so use the deployment's own
+      URL (Vercel sets VERCEL_URL); TESTFORGE_PUBLIC_URL overrides both."""
+    if os.environ.get("TESTFORGE_PUBLIC_URL"):
+        return os.environ["TESTFORGE_PUBLIC_URL"].rstrip("/")
+    if os.environ.get("VERCEL_URL"):
+        return f"https://{os.environ['VERCEL_URL']}"
     return f"http://127.0.0.1:{os.environ.get('PORT', '8080')}"
 
 
