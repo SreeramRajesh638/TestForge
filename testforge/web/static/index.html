@@ -162,11 +162,13 @@ $("run").onclick = async () => {
   $("run").disabled = true; $("status").textContent = "running…"; $("log").innerHTML = "";
   iterations = []; drawChart(); finalTests = "";
   for (const k of ["s-tests","s-line","s-branch","s-mut"]) $(k).textContent = "–";
-  const body = { source: $("source").value, module_name: $("modname").value.trim(), llm: $("llm").value, model: $("model").value.trim() || null,
+  $("modname").value = $("modname").value.trim().replace(/\.py$/i, "");
+  const body = { source: $("source").value, module_name: $("modname").value, llm: $("llm").value, model: $("model").value.trim() || null,
     effort: $("effort").value, max_refine_iterations: +$("iters").value, target_mutation_score: +$("target").value,
     use_planner: $("planner").checked, use_fixer: $("fixer").checked, use_mutation_feedback: $("feedback").checked };
   const res = await fetch("/api/runs", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
-  if (!res.ok){ log("Error: " + (await res.text()), "err"); $("run").disabled = false; $("status").textContent=""; return; }
+  if (!res.ok){ let msg = await res.text(); try { const d = JSON.parse(msg).detail; msg = typeof d === "string" ? d : JSON.stringify(d); } catch (e) {}
+    log("Error: " + msg, "err"); $("run").disabled = false; $("status").textContent=""; return; }
   const { run_id } = await res.json();
   const es = new EventSource(`/api/runs/${run_id}/events`);
   es.onmessage = ev => handle(JSON.parse(ev.data));

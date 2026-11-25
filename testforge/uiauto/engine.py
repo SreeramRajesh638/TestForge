@@ -93,7 +93,7 @@ class RunSummary:
 def load_scenarios(path: str | Path | None = None) -> list[dict]:
     """Scenarios from a JSON file (a list, or {"scenarios": [...]}); default: ShopLite."""
     p = Path(path) if path else SCENARIO_DIR / "shoplite.json"
-    data = json.loads(p.read_text())
+    data = json.loads(p.read_text(encoding="utf-8"))
     scenarios = data["scenarios"] if isinstance(data, dict) else data
     fragments = data.get("fragments", {}) if isinstance(data, dict) else {}
     for s in scenarios:

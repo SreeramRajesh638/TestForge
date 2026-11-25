@@ -267,7 +267,7 @@ def save_report(report: RunReport, out_dir: str | Path, module_name: str) -> tup
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     test_path = out / f"test_{module_name}.py"
-    test_path.write_text(report.final_tests)
+    test_path.write_text(report.final_tests, encoding="utf-8")
     report_path = out / f"report_{module_name}.json"
-    report_path.write_text(json.dumps(report.to_dict(), indent=2, default=str))
+    report_path.write_text(json.dumps(report.to_dict(), indent=2, default=str), encoding="utf-8")
     return test_path, report_path

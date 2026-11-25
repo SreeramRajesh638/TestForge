@@ -58,14 +58,14 @@ def _num(v):
 
 
 def load(directory: Path):
-    runs = [r for r in csv.DictReader(open(directory / "runs.csv")) if r["status"] == "ok"]
+    runs = [r for r in csv.DictReader(open(directory / "runs.csv", encoding="utf-8")) if r["status"] == "ok"]
     for r in runs:
         for k, v in r.items():
             if k not in ("module", "config", "status", "stop_reason", "error"):
                 r[k] = _num(v)
     iters = []
     if (directory / "iterations.csv").exists():
-        iters = list(csv.DictReader(open(directory / "iterations.csv")))
+        iters = list(csv.DictReader(open(directory / "iterations.csv", encoding="utf-8")))
         for r in iters:
             for k in ("iteration", "mutation_score", "line_coverage", "branch_coverage", "tests_total"):
                 r[k] = _num(r[k])
@@ -327,7 +327,7 @@ def report(runs, iters, configs, directory: Path, figures: list[str]) -> str:
 
     L += ["", "## Figures", ""] + [f"![{f}](figures/{f})" for f in figures]
     text = "\n".join(L) + "\n"
-    (directory / "analysis.md").write_text(text)
+    (directory / "analysis.md").write_text(text, encoding="utf-8")
     return text
 
 

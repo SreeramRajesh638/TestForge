@@ -22,6 +22,7 @@ def _env(work: Path, extra_paths: list[str] | None) -> dict:
     paths = [str(work)] + list(extra_paths or [])
     env["PYTHONPATH"] = os.pathsep.join(paths)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONUTF8"] = "1"  # Windows: non-ASCII source/output (e.g. ₹) must not break runs
     env.pop("PYTEST_ADDOPTS", None)
     return env
 
@@ -32,14 +33,14 @@ def run_tests(module_name: str, module_source: str, test_code: str, *,
     work = Path(tempfile.mkdtemp(prefix="tf_run_"))
     start = time.time()
     try:
-        (work / f"{module_name}.py").write_text(module_source)
-        (work / TEST_FILE).write_text(test_code)
+        (work / f"{module_name}.py").write_text(module_source, encoding="utf-8")
+        (work / TEST_FILE).write_text(test_code, encoding="utf-8")
         cmd = [sys.executable, "-m", "coverage", "run", "--branch",
                f"--include={module_name}.py", "-m", "pytest", TEST_FILE,
                "-q", "--tb=short", "-p", "no:cacheprovider", "--junitxml=junit.xml"]
         try:
             proc = subprocess.run(cmd, cwd=work, env=_env(work, extra_paths), capture_output=True,
-                                  text=True, timeout=timeout_s)
+                                  text=True, encoding="utf-8", errors="replace", timeout=timeout_s)
             output = proc.stdout + proc.stderr
         except subprocess.TimeoutExpired as e:
             out = (e.stdout or b"")
@@ -89,8 +90,8 @@ def _parse_junit(path: Path, output: str) -> tuple[list[TestOutcome], str | None
 def _coverage(work: Path, module_name: str) -> tuple[float, float]:
     try:
         subprocess.run([sys.executable, "-m", "coverage", "json", "-q", "-o", "cov.json"],
-                       cwd=work, capture_output=True, text=True, timeout=30)
-        data = json.loads((work / "cov.json").read_text())
+                       cwd=work, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+        data = json.loads((work / "cov.json").read_text(encoding="utf-8"))
     except Exception:
         return 0.0, 0.0
     totals = data.get("totals", {})
@@ -110,7 +111,7 @@ def run_pytest_quick(work: Path, test_file: str, timeout_s: int,
            "-p", "no:cacheprovider"]
     try:
         proc = subprocess.run(cmd, cwd=work, env=_env(work, extra_paths), capture_output=True,
-                              text=True, timeout=timeout_s)
+                              text=True, encoding="utf-8", errors="replace", timeout=timeout_s)
     except subprocess.TimeoutExpired:
         return "timeout"
     # pytest exit codes: 0 ok, 1 tests failed, 2 interrupted (often import error

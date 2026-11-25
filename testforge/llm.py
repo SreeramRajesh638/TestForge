@@ -308,10 +308,11 @@ class MockLLM(LLM):
         import os
         import shutil
         work = Path(tempfile.mkdtemp(prefix="tf_probe_"))
-        (work / f"{info.module_name}.py").write_text(info.source)
+        (work / f"{info.module_name}.py").write_text(info.source, encoding="utf-8")
         probe = Path(__file__).parent / "core" / "probe.py"
         env = os.environ.copy()
         env["PYTHONPATH"] = os.pathsep.join([str(work)] + self.extra_paths)
+        env["PYTHONUTF8"] = "1"
         results: list[dict] = []
         try:
             while len(results) < len(calls):
@@ -320,7 +321,7 @@ class MockLLM(LLM):
                                       "call_timeout_s": self.CALL_TIMEOUT_S})
                 try:
                     proc = subprocess.run([sys.executable, str(probe)], input=payload, cwd=work,
-                                          env=env, capture_output=True, text=True,
+                                          env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                           timeout=30 + self.CALL_TIMEOUT_S * len(remaining))
                     lines = proc.stdout.splitlines()
                 except subprocess.TimeoutExpired as e:

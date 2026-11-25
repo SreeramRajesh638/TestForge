@@ -168,3 +168,14 @@ def test_mutants_command_lists_shows_and_writes(capsys, tmp_path):
     assert "+    if is_member and price > 100:" in capsys.readouterr().out
     assert main(["mutants", str(src), "--write", "4"]) == 0
     assert "price > 100" in (tmp_path / "discount_mutant4.py").read_text()
+
+
+def test_dashboard_accepts_natural_module_names():
+    import pytest as _pytest
+    from fastapi import HTTPException
+    from testforge.web.app import normalize_module_name
+    assert normalize_module_name("shipping.py") == "shipping"
+    assert normalize_module_name(" my-code ") == "my_code"
+    for bad in ("123abc", "class", "test_shipping", ""):
+        with _pytest.raises(HTTPException):
+            normalize_module_name(bad)

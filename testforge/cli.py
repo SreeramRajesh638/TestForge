@@ -60,7 +60,7 @@ def cmd_generate(a: argparse.Namespace) -> int:
 
 def cmd_mutate(a: argparse.Namespace) -> int:
     info = analyze_file(a.module)
-    code = Path(a.tests).read_text()
+    code = Path(a.tests).read_text(encoding="utf-8")
     extra = [str(Path(a.module).resolve().parent)]
     res = run_tests(info.module_name, info.source, code, extra_paths=extra)
     print(f"Tests {res.passed}/{res.total} passing, line {res.line_coverage:.0%}, "
@@ -109,7 +109,7 @@ def cmd_mutants(a: argparse.Namespace) -> int:
     m, src = match
     if a.write is not None:
         out = Path(a.module).with_name(f"{Path(a.module).stem}_mutant{m.id}.py")
-        out.write_text(src)
+        out.write_text(src, encoding="utf-8")
         print(f"Wrote {out} ({m.describe()})")
         print("Note: the mutant is written in normalised form (comments removed).")
         return 0

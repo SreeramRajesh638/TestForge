@@ -93,7 +93,7 @@ def analyze_source(source: str, module_name: str, path: str = "<memory>") -> Mod
 
 def analyze_file(path: str | Path) -> ModuleInfo:
     p = Path(path)
-    return analyze_source(p.read_text(), p.stem, str(p))
+    return analyze_source(p.read_text(encoding="utf-8"), p.stem, str(p))
 
 
 def enclosing_function(info: ModuleInfo, lineno: int) -> str | None:

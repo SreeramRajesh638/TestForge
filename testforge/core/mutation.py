@@ -189,8 +189,8 @@ def run_mutation_analysis(info: ModuleInfo, test_code: str, *, timeout_s: int = 
             return mutant
         work = Path(tempfile.mkdtemp(prefix="tf_mut_"))
         try:
-            (work / f"{info.module_name}.py").write_text(src)
-            (work / "test_generated.py").write_text(test_code)
+            (work / f"{info.module_name}.py").write_text(src, encoding="utf-8")
+            (work / "test_generated.py").write_text(test_code, encoding="utf-8")
             status = run_pytest_quick(work, "test_generated.py", timeout_s, extra_paths)
             mutant.status = {"pass": "survived", "fail": "killed", "timeout": "timeout"}.get(status, "error")
         finally:

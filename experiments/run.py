@@ -107,11 +107,11 @@ def run_one(module: Path, name: str, cfg: Config, rep: int) -> tuple[dict, list[
 
 
 def save(out: Path, rows: list[dict], iters: list[dict]) -> None:
-    with open(out / "runs.csv", "w", newline="") as f:
+    with open(out / "runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, RUN_FIELDS)
         w.writeheader()
         w.writerows({k: r.get(k, "") for k in RUN_FIELDS} for r in rows)
-    with open(out / "iterations.csv", "w", newline="") as f:
+    with open(out / "iterations.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, ITER_FIELDS)
         w.writeheader()
         w.writerows(iters)
@@ -156,7 +156,7 @@ def summarize(rows: list[dict], out: Path, reps: int) -> str:
                 cells.append("–")
         lines.append(f"| {m} | " + " | ".join(cells) + " |")
     text = "\n".join(lines) + "\n"
-    (out / "summary.md").write_text(text)
+    (out / "summary.md").write_text(text, encoding="utf-8")
     return text
 
 
@@ -209,10 +209,10 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     rows, iters = [], []
     if a.resume and (out / "runs.csv").exists():
-        rows = [r for r in csv.DictReader(open(out / "runs.csv")) if r["status"] == "ok"]
+        rows = [r for r in csv.DictReader(open(out / "runs.csv", encoding="utf-8")) if r["status"] == "ok"]
         done = {(r["module"], r["config"], str(r["rep"])) for r in rows}
         if (out / "iterations.csv").exists():
-            iters = [r for r in csv.DictReader(open(out / "iterations.csv"))
+            iters = [r for r in csv.DictReader(open(out / "iterations.csv", encoding="utf-8"))
                      if (r["module"], r["config"], str(r["rep"])) in done]
         for r in rows:  # CSV gives strings; summarize() needs numbers
             for k in RUN_FIELDS:

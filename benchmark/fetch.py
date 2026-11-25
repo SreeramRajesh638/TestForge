@@ -66,12 +66,12 @@ def fetch(entry: dict, cache: Path) -> tuple[str, str]:
     note = f"{entry['package']} {entry['version']} - license: {entry['license']}\n\n"
     body = license_text.decode(errors="replace") if license_text else \
         "(no license file in the source distribution; see the package metadata on PyPI)\n"
-    (lic_dir / f"{entry['name']}.txt").write_text(note + body)
+    (lic_dir / f"{entry['name']}.txt").write_text(note + body, encoding="utf-8")
     return "ok", f"{len(source.splitlines())} lines"
 
 
 def main() -> int:
-    manifest = json.loads((HERE / "manifest.json").read_text())
+    manifest = json.loads((HERE / "manifest.json").read_text(encoding="utf-8"))
     OUT.mkdir(exist_ok=True)
     failures = 0
     with tempfile.TemporaryDirectory(prefix="tf_bench_") as tmp:

@@ -80,6 +80,25 @@ class RunRequest(BaseModel):
     use_mutation_feedback: bool = True
 
 
+def normalize_module_name(name: str) -> str:
+    """Accept what people naturally type ('shipping.py', 'my-code') and turn it
+    into an importable module name; explain clearly when that is impossible."""
+    import keyword
+    n = name.strip()
+    if n.lower().endswith(".py"):
+        n = n[:-3]
+    n = re.sub(r"[\s\-.]+", "_", n)
+    if not n:
+        raise HTTPException(400, "Enter a module name, for example: shipping")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", n) or keyword.iskeyword(n):
+        raise HTTPException(400, f"'{name}' can't be a Python module name. Use letters, digits and "
+                                 "underscores, starting with a letter, for example: shipping")
+    if n.lower().startswith("test"):
+        raise HTTPException(400, f"'{name}' starts with 'test', which pytest treats as a test file. "
+                                 "Use a different name, for example: shipping")
+    return n
+
+
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
@@ -89,13 +108,12 @@ def index():
 def examples():
     if not EXAMPLES.exists():
         return []
-    return [{"name": p.stem, "source": p.read_text()} for p in sorted(EXAMPLES.glob("*.py"))]
+    return [{"name": p.stem, "source": p.read_text(encoding="utf-8")} for p in sorted(EXAMPLES.glob("*.py"))]
 
 
 @app.post("/api/runs")
 def start_run(req: RunRequest):
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", req.module_name):
-        raise HTTPException(400, "module_name must be a valid Python identifier")
+    req.module_name = normalize_module_name(req.module_name)
     if req.llm not in ("mock", "ollama", "groq", "openrouter", "claude"):
         raise HTTPException(400, "llm must be one of mock, ollama, groq, openrouter, claude")
     if not _running.acquire(blocking=False):
@@ -112,7 +130,7 @@ def start_run(req: RunRequest):
     def worker() -> None:
         work = Path(tempfile.mkdtemp(prefix="tf_web_"))
         path = work / f"{req.module_name}.py"
-        path.write_text(req.source)
+        path.write_text(req.source, encoding="utf-8")
         cfg = Config(llm=req.llm, model=(req.model or None), effort=req.effort,
                      max_refine_iterations=req.max_refine_iterations,
                      target_mutation_score=req.target_mutation_score,
