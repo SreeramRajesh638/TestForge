@@ -3,9 +3,11 @@
 **/__pycache__
 .pytest_cache
 *.egg-info
-results
+results/dashboard_runs
 generated_tests
 benchmark/modules
 docs
 *_key.txt
 .env
+frontend/node_modules
+frontend/dist

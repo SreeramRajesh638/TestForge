@@ -8,7 +8,11 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY testforge ./testforge
 COPY examples ./examples
+COPY results ./results
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# libatomic1: needed by the Node.js runtime bundled with recent Playwright releases
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
+ && rm -rf /var/lib/apt/lists/*
 RUN pip install -e ".[all]" \
  && python -m playwright install --with-deps chromium \
  && useradd --create-home --uid 10001 testforge \
