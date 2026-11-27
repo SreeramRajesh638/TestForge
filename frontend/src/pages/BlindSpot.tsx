@@ -117,6 +117,7 @@ export default function BlindSpot() {
   useEffect(() => {
     if (s) window.dispatchEvent(new CustomEvent("tf:blindspot", { detail: { unresolved: s.summary.unresolved } }));
   }, [s?.summary.unresolved]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (s && s.status !== "running") loadSessions(); }, [s?.status, s?.summary.resolved, loadSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ?mutant=<id>: open its diagnosis, or investigate it once the analysis is done
   useEffect(() => {

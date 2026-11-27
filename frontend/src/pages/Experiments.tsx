@@ -14,6 +14,8 @@ const LABELS: Record<string, string> = {
   groq_no_planner: "Groq · no Planner", groq_no_fixer: "Groq · no Fixer", groq_no_feedback: "Groq · no feedback",
   claude_full: "Claude · TestForge", claude_single_shot: "Claude · single prompt", ollama_full: "Local model · TestForge",
   ollama_single_shot: "Local model · single prompt",
+  mock_blindspot: "Non-LLM + Blind Spot Intelligence", groq_blindspot: "Groq · TestForge + Blind Spot",
+  claude_blindspot: "Claude · TestForge + Blind Spot", ollama_blindspot: "Local model · TestForge + Blind Spot",
 };
 const label = (c: string) => LABELS[c] || c.replace(/_/g, " ");
 
