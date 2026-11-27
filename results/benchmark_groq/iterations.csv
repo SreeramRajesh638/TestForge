@@ -2,3 +2,7 @@ module,config,rep,iteration,tests_total,line_coverage,branch_coverage,mutation_s
 base58,groq_full,0,0,25,1.0,0.9545,0.9808,1,5956,8011,64.13
 baseconv,groq_full,0,0,19,0.9104,0.7917,0.7015,20,5701,5150,24.56
 baseconv,groq_full,0,1,19,0.9104,0.7917,0.9038,5,9223,7382,57.51
+filesize,groq_full,0,0,23,1.0,1.0,0.3333,88,4158,3855,22.71
+filesize,groq_full,0,1,63,1.0,1.0,0.6744,42,7448,11521,64.63
+filesize,groq_full,0,2,80,1.0,1.0,0.9291,9,11727,16755,127.75
+filesize,groq_full,0,3,85,1.0,1.0,0.9837,2,14350,19042,171.85
