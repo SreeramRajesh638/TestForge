@@ -364,10 +364,14 @@ class OllamaClient(LLM):
     """
 
     def __init__(self, model: str = "qwen2.5-coder:3b", host: str | None = None,
-                 num_ctx: int = 8192, timeout_s: int = 900, retries: int = 1) -> None:
+                 num_ctx: int = 8192, timeout_s: int = 900, retries: int = 1,
+                 max_reply_tokens: int = 4096) -> None:
         super().__init__()
         import os
         self.model = model
+        # Cap on one reply. Small models in JSON mode can otherwise generate
+        # (often whitespace) until the request times out.
+        self.max_reply_tokens = max_reply_tokens
         self.host = (host or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434").rstrip("/")
         if not self.host.startswith("http"):
             self.host = "http://" + self.host
@@ -388,6 +392,8 @@ class OllamaClient(LLM):
             if e.code == 404 and "not found" in detail:
                 raise LLMError(f"Ollama model '{self.model}' is not downloaded. "
                                f"Run: ollama pull {self.model}") from e
+            if "repeat limit" in detail:
+                raise _OllamaRepetition(detail) from e
             raise LLMError(f"Ollama error {e.code}: {detail}") from e
         except urllib.error.URLError as e:
             raise LLMError(f"Cannot reach Ollama at {self.host}. Is Ollama running? ({e.reason})") from e
@@ -399,16 +405,33 @@ class OllamaClient(LLM):
         messages = [{"role": "system", "content": system},
                     {"role": "user", "content": prompt}]
         last_error = ""
-        for _ in range(self.retries + 1):
-            data = self._post("/api/chat", {
-                "model": self.model,
-                "messages": messages,
-                "stream": False,
-                "format": schema.model_json_schema(),
-                # temperature 0 keeps runs as repeatable as a local model allows
-                "options": {"temperature": 0, "num_ctx": self.num_ctx},
-            })
-            self.usage.add(role, data.get("prompt_eval_count", 0), data.get("eval_count", 0))
+        # temperature 0 keeps runs as repeatable as a local model allows
+        options = {"temperature": 0, "num_ctx": self.num_ctx, "num_predict": self.max_reply_tokens}
+        repetitions = 0
+        attempt = 0
+        while attempt <= self.retries:
+            try:
+                data = self._post("/api/chat", {
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": False,
+                    "format": schema.model_json_schema(),
+                    "options": options,
+                })
+                self.usage.add(role, data.get("prompt_eval_count", 0), data.get("eval_count", 0))
+                if data.get("done_reason") == "length":
+                    raise _OllamaRepetition(f"reply hit the {self.max_reply_tokens}-token limit")
+            except _OllamaRepetition as e:
+                # Small models at temperature 0 can loop (on a phrase or on whitespace)
+                # until Ollama aborts or the reply cap is hit. Retry with a little
+                # randomness and a repeat penalty (fixed seed, so runs stay repeatable).
+                repetitions += 1
+                if repetitions > 2:
+                    raise LLMError(f"{role}: Ollama model kept repeating itself: {e}") from e
+                options = {**options, "temperature": 0.3 * repetitions, "repeat_penalty": 1.15,
+                           "seed": 42 + repetitions}
+                continue
+            attempt += 1
             text = (data.get("message") or {}).get("content", "")
             try:
                 return schema.model_validate_json(text)
@@ -418,6 +441,10 @@ class OllamaClient(LLM):
                              {"role": "user", "content": "Your reply did not match the required JSON "
                                                          f"schema:\n{last_error}\nReply again with valid JSON."}]
         raise LLMError(f"{role}: Ollama reply did not match the schema: {last_error}")
+
+
+class _OllamaRepetition(LLMError):
+    """Ollama aborted generation because the model repeated itself."""
 
 
 # ==========================================================================

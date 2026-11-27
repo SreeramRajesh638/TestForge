@@ -31,6 +31,7 @@ REFINED = ("from sign import sign\n\ndef test_zero():\n    assert sign(0) == 0\n
 class FakeOllama(BaseHTTPRequestHandler):
     requests: list[dict] = []
     break_first_reply = False
+    repeat_aborts = 0
 
     def log_message(self, *args):  # keep test output quiet
         pass
@@ -40,6 +41,15 @@ class FakeOllama(BaseHTTPRequestHandler):
         FakeOllama.requests.append(body)
         if body["model"] == "missing-model":
             self._send(404, {"error": f"model '{body['model']}' not found"})
+            return
+        if body["model"] == "loopy" and FakeOllama.repeat_aborts > 0:
+            FakeOllama.repeat_aborts -= 1
+            self._send(500, {"error": "prediction aborted, token repeat limit reached"})
+            return
+        if body["model"] == "runaway" and FakeOllama.repeat_aborts > 0:
+            FakeOllama.repeat_aborts -= 1  # reply cut off at num_predict
+            self._send(200, {"message": {"role": "assistant", "content": '{"code": "x' + " " * 50},
+                             "done_reason": "length", "prompt_eval_count": 100, "eval_count": 4096})
             return
         title = body["format"].get("title")
         if FakeOllama.break_first_reply:
@@ -67,7 +77,8 @@ class FakeOllama(BaseHTTPRequestHandler):
 def server():
     FakeOllama.requests = []
     FakeOllama.break_first_reply = False
-    httpd = HTTPServer(("127.0.0.1", 0), FakeOllama)
+    FakeOllama.repeat_aborts = 0
+    httpd =HTTPServer(("127.0.0.1", 0), FakeOllama)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{httpd.server_port}"
     httpd.shutdown()
@@ -80,7 +91,7 @@ def test_request_uses_schema_and_deterministic_options(server):
     req = FakeOllama.requests[0]
     assert req["model"] == "tiny" and req["stream"] is False
     assert req["format"]["title"] == "TestPlan"
-    assert req["options"] == {"temperature": 0, "num_ctx": 4096}
+    assert req["options"] == {"temperature": 0, "num_ctx": 4096, "num_predict": 4096}
     assert req["messages"][0]["role"] == "system"
     assert client.usage.input_tokens == 100 and client.usage.output_tokens == 20
 
@@ -92,6 +103,31 @@ def test_invalid_reply_is_retried_with_the_error(server):
     assert out.code == FIRST_TESTS
     retry = FakeOllama.requests[1]["messages"]
     assert "did not match the required JSON schema" in retry[-1]["content"]
+
+
+def test_repetition_abort_is_retried_with_penalty(server):
+    FakeOllama.repeat_aborts = 1
+    out = OllamaClient(model="loopy", host=server).complete("writer", "sys", "prompt", GeneratedTests)
+    assert out.code == FIRST_TESTS
+    retry = FakeOllama.requests[1]["options"]
+    assert retry["temperature"] > 0 and retry["repeat_penalty"] > 1 and "seed" in retry
+
+
+def test_reply_cut_off_at_cap_is_retried_with_penalty(server):
+    FakeOllama.repeat_aborts = 1
+    client = OllamaClient(model="runaway", host=server)
+    out = client.complete("fixer", "sys", "prompt", GeneratedTests)
+    assert out.code == FIRST_TESTS
+    assert FakeOllama.requests[0]["options"]["num_predict"] == 4096
+    assert FakeOllama.requests[1]["options"]["repeat_penalty"] > 1
+    assert client.usage.output_tokens == 4096 + 20  # the cut-off reply still counts
+
+
+def test_repetition_gives_up_after_two_retries(server):
+    FakeOllama.repeat_aborts = 99
+    with pytest.raises(LLMError, match="kept repeating"):
+        OllamaClient(model="loopy", host=server).complete("writer", "sys", "prompt", GeneratedTests)
+    assert len(FakeOllama.requests) == 3
 
 
 def test_missing_model_gives_pull_hint(server):

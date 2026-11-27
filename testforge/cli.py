@@ -118,7 +118,20 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(func=cmd_serve)
 
     a = p.parse_args(argv)
+    _tolerant_output()
     return a.func(a)
+
+
+def _tolerant_output() -> None:
+    """Don't crash on the agents' emoji when output goes to a pipe or file on
+    Windows, where Python then encodes with the ANSI code page (e.g. cp1252):
+    characters it can't encode are replaced instead of raising."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
 
 
 if __name__ == "__main__":
