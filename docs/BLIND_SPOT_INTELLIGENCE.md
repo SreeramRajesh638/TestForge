@@ -148,6 +148,30 @@ python experiments/run.py --modules benchmark/modules --configs mock_baseline,mo
 python experiments/analyze.py results/benchmark_blindspot_mock
 ```
 
+### First results (offline backend, no LLM)
+
+`results/benchmark_blindspot_mock/` (15 benchmark modules, 1 repetition, 30% of mutants held out; the mock
+backend is deterministic). Full tables: `analysis.md` in that folder.
+
+| | Original pipeline | + Blind Spot Intelligence |
+|---|---|---|
+| Final mutation score (mean over modules) | 31.5% | 36.7% (+5.2 pts, Wilcoxon p = 0.031) |
+| Held-out mutants (never shown to the agents) | 29.9% | 34.3% (+4.4 pts, p = 0.063) |
+| Additional mutants killed by refinement | 52 | 117 |
+| Time per run | 37 s | 66 s |
+
+354 blind spots were diagnosed (reachability 250, propagation 87, infection 8, inconclusive 9); 260 are
+confirmed, 91 are flagged as possibly equivalent (reported, not removed), 43 were resolved with verified
+tests, and 30 of 31 counterexample-based corrective tests were valid on the original program (the 31st was
+rejected by verification). Gains concentrate where a distinguishing input exists (baseconv 15% → 54%,
+roman 47% → 71%); modules whose mock tests never construct the right inputs (docopt, formatutils) stay
+unchanged, which is where an LLM backend (`groq_blindspot`, `claude_blindspot`) is needed. Diagnosis
+accuracy against manual labels is pending: label a sample in `diagnoses.csv`.
+
+![Original vs Blind Spot Intelligence](../results/benchmark_blindspot_mock/figures/blindspot_mock_blindspot.png)
+
+![Workspace after resolving the demonstration](blindspot/demo_resolved.png)
+
 ## 8. API and events
 
 REST endpoints are listed in `testforge/web/blindspot_api.py`. Live updates use

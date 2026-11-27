@@ -373,21 +373,35 @@ def blindspot_section(runs, configs, directory: Path) -> list[str]:
                 vals.append("–" if v is None else (f"{v:.1%}" if pct else f"{v:,.2f}"))
             L.append(f"| {name} | {vals[0]} | {vals[1]} |")
         rb = [r for r in runs if r["config"] == b]
-        found = sum(r.get("blind_spots") or 0 for r in rb)
-        res = sum(r.get("blind_spots_resolved") or 0 for r in rb)
-        prop = sum(r.get("corrective_tests_proposed") or 0 for r in rb)
-        valid = sum(r.get("corrective_tests_valid") or 0 for r in rb)
-        conf = sum(r.get("confirmed_diagnoses") or 0 for r in rb)
-        eqv = sum(r.get("potential_equivalent") or 0 for r in rb)
+        prop = int(sum(r.get("corrective_tests_proposed") or 0 for r in rb))
+        valid = int(sum(r.get("corrective_tests_valid") or 0 for r in rb))
+        dfile = directory / "diagnoses.csv"
+        drows = [d for d in csv.DictReader(open(dfile, encoding="utf-8")) if d["config"] == b] if dfile.exists() else []
+        if drows:  # one row per diagnosis: the consistent source for these counts
+            found = len(drows)
+            res = sum(1 for d in drows if d["resolution_status"] == "resolved")
+            conf = sum(1 for d in drows if d["finding_status"] == "confirmed")
+            eqv = sum(1 for d in drows if "Potential equivalent mutant" in d["secondary_labels"])
+            cats = {}
+            for d in drows:
+                cats[d["primary_category"]] = cats.get(d["primary_category"], 0) + 1
+        else:
+            found = int(sum(r.get("blind_spots") or 0 for r in rb))
+            res = int(sum(r.get("blind_spots_resolved") or 0 for r in rb))
+            conf = int(sum(r.get("confirmed_diagnoses") or 0 for r in rb))
+            eqv = int(sum(r.get("potential_equivalent") or 0 for r in rb))
+            cats = {}
         L += ["", f"- Blind spots diagnosed: **{found}** over {len(rb)} modules; verified resolutions: **{res}** "
                   f"({res / found:.0%} of diagnosed)." if found else f"- No blind spots were diagnosed over {len(rb)} modules.",
-              f"- Confirmed diagnoses (measured category + distinguishing input or observed difference): {conf}.",
+              f"- Confirmed diagnoses (measured category + distinguishing input or observed difference): {conf}"
+              + (f" of {found}." if found else "."),
+              *([f"- Primary categories: " + ", ".join(f"{k} {v}" for k, v in sorted(cats.items(), key=lambda x: -x[1])) + "."] if cats else []),
               f"- Corrective test validity: {valid} of {prop} proposed corrective tests passed on the original program"
               + (f" ({valid / prop:.0%})." if prop else "."),
               f"- Suspected equivalent mutants (no distinguishing input found; reported, not removed): {eqv}."]
         for c in (a, b):
             rows = [r for r in runs if r["config"] == c]
-            gained = sum((r.get("mutants_killed_final") or 0) - (r.get("mutants_killed_initial") or 0) for r in rows)
+            gained = int(sum((r.get("mutants_killed_final") or 0) - (r.get("mutants_killed_initial") or 0) for r in rows))
             secs = sum(r.get("elapsed_s") or 0 for r in rows)
             cost = sum(r.get("cost_usd") or 0 for r in rows)
             toks = sum((r.get("input_tokens") or 0) + (r.get("output_tokens") or 0) for r in rows)

@@ -120,6 +120,8 @@ def run_one(module: Path, name: str, cfg: Config, rep: int) -> tuple[dict, list[
     bs = report.blind_spot or {}
     diags = bs.get("diagnoses", [])
     proposed = [d for d in diags if d.get("proposed_test")]
+    if bs:  # count from the report's diagnoses (includes the final diagnosis pass)
+        row.update(blind_spots=len(diags), blind_spots_resolved=sum(1 for d in diags if d["resolution_status"] == "resolved"))
     row.update(confirmed_diagnoses=sum(1 for d in diags if d["finding_status"] == "confirmed") if bs else "",
                potential_equivalent=sum(1 for d in diags if "Potential equivalent mutant" in d["secondary_labels"])
                if bs else "",
