@@ -416,17 +416,24 @@ class BlindSpotEngine:
                     break
             params = [p for p in info.params if p.default is None and not p.name.startswith("*")]
             kinds = [_kind(p.annotation, p.name, p.default) for p in params]
+            if not seeds and not kinds and params:
+                continue
             if "." in fn and init is None:
+                # No test constructed this class: try a few constructor argument sets
+                # (guessed types, then all strings, then all integers); a wrong guess
+                # makes both versions raise the same exception, which proves nothing.
                 cls = next((c for c in self.info.classes if c.name == fn.split(".")[0]), None)
                 if cls is None:
                     continue
                 from ..llm import _VALUES
-                init = [repr(_VALUES[_kind(p.annotation, p.name)][1]) for p in cls.init_params
-                        if p.default is None and not p.name.startswith("*")]
-            if not seeds and not kinds and params:
+                req = [p for p in cls.init_params if p.default is None and not p.name.startswith("*")]
+                variants = [[repr(_VALUES[_kind(p.annotation, p.name)][1]) for p in req],
+                            [repr(_VALUES["str"][2]) for _ in req], [repr(_VALUES["int"][2]) for _ in req]]
+                for v in list(dict.fromkeys(tuple(x) for x in variants)):
+                    entries.append({"fn": fn, "seeds": seeds, "init": list(v), "kinds": kinds})
                 continue
             entries.append({"fn": fn, "seeds": seeds, "init": init, "kinds": kinds})
-        return entries
+        return entries[:6]
 
     # ------------------------------------------------------------ explanations
     def _explain(self, m: Mutant, primary: str, e: Evidence, cx: Counterexample | None, searched: bool,
