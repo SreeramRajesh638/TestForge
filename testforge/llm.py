@@ -66,8 +66,11 @@ class ClaudeClient(LLM):
         super().__init__()
         import anthropic  # imported lazily so the mock works without it
 
+        import os
         self._anthropic = anthropic
-        self.client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+        # ANTHROPIC_API_KEY (or another SDK credential) wins; otherwise anthropic_key.txt
+        file_key = None if os.environ.get("ANTHROPIC_API_KEY") else _key_from_file("anthropic")
+        self.client = anthropic.Anthropic(api_key=file_key) if file_key else anthropic.Anthropic()
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
@@ -446,9 +449,10 @@ class OpenAICompatClient(LLM):
         self.base_url = (base_url or default_url or "").rstrip("/")
         if not self.base_url:
             raise LLMError(f"unknown provider '{provider}' and no base URL given")
-        self.api_key = api_key or os.environ.get(key_env)
+        self.api_key = (api_key or os.environ.get(key_env) or _key_from_file(provider) or "").strip()
         if not self.api_key:
-            raise LLMError(f"Set the {key_env} environment variable to your {provider} API key")
+            raise LLMError(f"Set the {key_env} environment variable to your {provider} API key "
+                           f"(or put the key alone in {provider}_key.txt in the project folder)")
         self.model = model or default_model
         # gpt-oss style reasoning models accept low | medium | high
         self.reasoning_effort = {"xhigh": "high", "max": "high"}.get(effort, effort)
@@ -542,6 +546,26 @@ class OpenAICompatClient(LLM):
                     "Your previous reply did not match the required JSON schema:\n"
                     f"{last_error}\nReply again, with valid JSON only."}]
         raise LLMError(f"{role}: {self.provider} reply did not match the schema: {last_error}")
+
+
+def _key_from_file(provider: str) -> str | None:
+    """Read <provider>_key.txt from the current folder or the project root.
+
+    Uses utf-8-sig so a byte-order mark (Notepad's "UTF-8 with BOM") is dropped,
+    and keeps only the first non-empty line, stripped of spaces."""
+    from pathlib import Path
+    name = f"{provider}_key.txt"
+    for folder in (Path.cwd(), Path(__file__).resolve().parents[1]):
+        path = folder / name
+        if path.is_file():
+            try:
+                lines = path.read_text(encoding="utf-8-sig").splitlines()
+            except (OSError, UnicodeDecodeError):
+                continue
+            for line in lines:
+                if line.strip():
+                    return line.strip()
+    return None
 
 
 class _HTTPStatus(Exception):

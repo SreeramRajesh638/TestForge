@@ -90,8 +90,16 @@ def test_invalid_key_is_reported(server):
 
 def test_missing_key_explains_env_var(monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setattr("testforge.llm._key_from_file", lambda provider: None)
     with pytest.raises(LLMError, match="GROQ_API_KEY"):
         OpenAICompatClient(provider="groq")
+
+
+def test_key_file_tolerates_bom_and_spaces(tmp_path, monkeypatch):
+    from testforge.llm import _key_from_file
+    (tmp_path / "groq_key.txt").write_bytes(b"\xef\xbb\xbf  gsk_example  \r\n\r\n")
+    monkeypatch.chdir(tmp_path)
+    assert _key_from_file("groq") == "gsk_example"
 
 
 def test_retry_after_parsing():

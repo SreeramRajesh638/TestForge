@@ -9,10 +9,16 @@ if not exist .venv\Scripts\activate.bat (
   exit /b 1
 )
 if exist groq_key.txt (
-  set /p GROQ_API_KEY=<groq_key.txt
-  echo Groq key loaded from groq_key.txt
+  REM TestForge reads the file itself (tolerates a BOM and stray spaces, which
+  REM "set /p" does not); clear any old key so the file is the one used.
+  set "GROQ_API_KEY="
+  echo Groq key will be read from groq_key.txt
 ) else (
   echo No groq_key.txt found - the Groq backend will not work, the offline Mock backend will.
+)
+if exist anthropic_key.txt (
+  set "ANTHROPIC_API_KEY="
+  echo Claude key will be read from anthropic_key.txt
 )
 call .venv\Scripts\activate.bat
 start "" http://127.0.0.1:8000
