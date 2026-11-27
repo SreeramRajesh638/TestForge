@@ -130,7 +130,8 @@ def fixer_prompt(info: ModuleInfo, test_code: str, failures: str,
 
 
 def refiner_prompt(info: ModuleInfo, test_code: str | None, survivors: list[Mutant],
-                   focus: set[str] | None = None, existing_names: list[str] | None = None) -> str:
+                   focus: set[str] | None = None, existing_names: list[str] | None = None,
+                   diagnoses: str | None = None) -> str:
     listing = "\n".join(m.describe() for m in survivors)
     if test_code is not None:
         suite = f"Existing test suite:\n```python\n{test_code}\n```"
@@ -139,4 +140,6 @@ def refiner_prompt(info: ModuleInfo, test_code: str | None, survivors: list[Muta
                  + ", ".join(existing_names or []))
     return (f"{_module_block(info, focus)}\n\n{suite}\n\n"
             f"Surviving mutants ({len(survivors)}):\n{listing}\n\n"
-            "Write new tests that kill these mutants.")
+            + (f"Blind Spot Intelligence diagnoses (measured execution evidence):\n{diagnoses}\n\n"
+               if diagnoses else "")
+            + "Write new tests that kill these mutants.")

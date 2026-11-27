@@ -66,8 +66,8 @@ class WriterAgent(Agent):
         self.log(f"Wrote test file ({len(code.splitlines())} lines)", notes=out.notes)
         return code
 
-    def refine(self, info: ModuleInfo, test_code: str, survivors) -> RefinedTests:
-        prompt = prompts.refiner_prompt(info, test_code, survivors)
+    def refine(self, info: ModuleInfo, test_code: str, survivors, diagnoses: str | None = None) -> RefinedTests:
+        prompt = prompts.refiner_prompt(info, test_code, survivors, diagnoses=diagnoses)
         budget = self.config.max_prompt_tokens
         if budget and estimate_tokens(prompts.REFINER_SYSTEM + prompt) > budget:
             # focus on the functions the survivors live in; list test names instead of code
@@ -75,7 +75,8 @@ class WriterAgent(Agent):
             while True:
                 funcs = {m.function for m in survivors}
                 focus = None if None in funcs else funcs
-                prompt = prompts.refiner_prompt(info, None, survivors, focus, list_test_names(test_code))
+                prompt = prompts.refiner_prompt(info, None, survivors, focus, list_test_names(test_code),
+                                                diagnoses=diagnoses[:1500] if diagnoses else None)
                 if estimate_tokens(prompts.REFINER_SYSTEM + prompt) <= budget or len(survivors) <= 3:
                     break
                 survivors = survivors[: max(3, len(survivors) // 2)]
@@ -88,6 +89,51 @@ class WriterAgent(Agent):
                  + (f"; flagged {len(out.equivalent_mutant_ids)} as equivalent"
                     if out.equivalent_mutant_ids else ""), notes=out.notes)
         return out
+
+
+class BlindSpotAgent(Agent):
+    """Blind Spot Intelligence: explains WHY tests miss each surviving mutant
+    (RIPR evidence), finds distinguishing inputs and verifies corrective tests.
+    Thin agent wrapper around testforge.blindspot.engine.BlindSpotEngine."""
+    name, emoji = "Blind Spot Intelligence", "🧠"
+
+    def __init__(self, llm, config, emit=None, *, info: ModuleInfo, extra_paths=None, cancel=None,
+                 session_id: str = "run") -> None:
+        super().__init__(llm, config, emit)
+        from ..blindspot.engine import BlindSpotEngine
+        self.engine = BlindSpotEngine(info, llm, config, self._emit, session_id=session_id,
+                                      extra_paths=extra_paths, cancel=cancel)
+
+    def run(self, test_code: str, mut: MutationResult, round_no: int, survivors) -> tuple[str, list]:
+        """Diagnose, propose and verify. Returns (suite with verified corrective tests, diagnoses)."""
+        ds = self.engine.investigate(test_code, mut, round_no, survivors=survivors)
+        by = {}
+        for d in ds:
+            by[d.primary_category] = by.get(d.primary_category, 0) + 1
+        self.log(f"Diagnosed {len(ds)} blind spot(s): " + (", ".join(f"{v} {k}" for k, v in by.items()) or "none"),
+                 blind_spots=len(ds))
+        self.engine.propose_llm(ds)
+        suite = self.engine.verify(test_code, ds)
+        resolved = sum(1 for d in ds if d.resolution_status == "resolved")
+        if any(d.proposed_test for d in ds):
+            self.log(f"Verified {resolved} corrective test(s): each passes on the original, fails on its mutant, "
+                     "and the suite stays green", resolved=resolved)
+        return suite, ds
+
+    def brief(self, diagnoses) -> str:
+        """Evidence summary for the Writer's targeted refinement prompt."""
+        lines = []
+        for d in diagnoses:
+            if d.resolution_status == "resolved" or d.primary_category == "inconclusive":
+                continue
+            line = (f"- mutant #{d.mutant_id}: {d.primary_category} failure. {d.corrective_strategy}")
+            if d.counterexample:
+                line += (f" Distinguishing input: {d.counterexample.call} (original {d.counterexample.original['repr']},"
+                         f" mutant {d.counterexample.mutant['repr']}).")
+            elif d.evidence.reached is False:
+                line += " No test executes this line."
+            lines.append(line)
+        return "\n".join(lines[:12])
 
 
 class ExecutorAgent(Agent):

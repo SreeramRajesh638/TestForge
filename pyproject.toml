@@ -14,6 +14,7 @@ dependencies = [
     "coverage>=7.4",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "hypothesis>=6.100",   # Blind Spot Intelligence: property-based counterexample search
 ]
 
 [project.optional-dependencies]

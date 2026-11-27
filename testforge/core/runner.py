@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -121,25 +122,38 @@ def _coverage(work: Path, module_name: str) -> tuple[float, float]:
 def run_pytest_quick(work: Path, test_file: str, timeout_s: int,
                      extra_paths: list[str] | None = None) -> str:
     """Pass/fail run used for mutants (recorded as a telemetry event)."""
+    return run_pytest_quick_detail(work, test_file, timeout_s, extra_paths)[0]
+
+
+def run_pytest_quick_detail(work: Path, test_file: str, timeout_s: int,
+                            extra_paths: list[str] | None = None) -> tuple[str, str | None]:
+    """Like run_pytest_quick, also returning the first failing test (the one
+    that killed the mutant), when pytest reports it."""
     from .. import telemetry
     with telemetry.span("mutant_run", "orchestrator", "mutation") as info:
-        status = _run_pytest_quick(work, test_file, timeout_s, extra_paths)
+        status, failing = _run_pytest_quick(work, test_file, timeout_s, extra_paths)
         info["detail"] = {"pass": "mutant survived", "fail": "mutant killed",
                           "timeout": "timeout (killed)"}.get(status, status)
         info["ok"] = status != "error"
-        return status
+        return status, failing
+
+
+_FAILED_LINE = re.compile(r"^(?:FAILED|ERROR) \S+?::(\S+)", re.M)
 
 
 def _run_pytest_quick(work: Path, test_file: str, timeout_s: int,
-                     extra_paths: list[str] | None = None) -> str:
-    """Fast pass/fail run used for mutants. Returns 'pass' | 'fail' | 'timeout' | 'error'."""
-    cmd = [sys.executable, "-m", "pytest", test_file, "-x", "-q", "--tb=no",
+                     extra_paths: list[str] | None = None) -> tuple[str, str | None]:
+    """Fast pass/fail run used for mutants. Returns ('pass' | 'fail' | 'timeout' | 'error',
+    name of the first failing test or None)."""
+    cmd = [sys.executable, "-m", "pytest", test_file, "-x", "-q", "--tb=no", "-rfE",
            "-p", "no:cacheprovider"]
     try:
         proc = subprocess.run(cmd, cwd=work, env=_env(work, extra_paths), capture_output=True,
                               text=True, encoding="utf-8", errors="replace", timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return "timeout"
+        return "timeout", None
     # pytest exit codes: 0 ok, 1 tests failed, 2 interrupted (often import error
     # caused by the mutant -> counts as killed), 5 no tests collected
-    return {0: "pass", 1: "fail", 2: "fail"}.get(proc.returncode, "error")
+    status = {0: "pass", 1: "fail", 2: "fail"}.get(proc.returncode, "error")
+    found = _FAILED_LINE.search(proc.stdout)
+    return status, (found.group(1).split(" ")[0] if found and status == "fail" else None)

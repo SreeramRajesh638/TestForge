@@ -3,6 +3,8 @@
 import { AnimatePresence, LayoutGroup, m } from "framer-motion";
 import clsx from "clsx";
 import { memo, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { PRIMARY, type Diagnosis } from "../../lib/blindspot";
 import { pct, type Survivor } from "../../lib/api";
 import { fmtT, STAGES, type RunView } from "../../lib/run";
 import { useApp } from "../../lib/store";
@@ -12,33 +14,37 @@ import { CodeView } from "../ui/code";
 import { Badge, Button, Tabs } from "../ui/controls";
 import { AnimatedNumber, Card, CardHead, EmptyState, Gauge, Modal, Skeleton, TiltCard, Tooltip } from "../ui/display";
 
-export const Pipeline = memo(function Pipeline({ view, step }: { view: RunView; step?: number }) {
+export const Pipeline = memo(function Pipeline({ view, step, blindSpot }: { view: RunView; step?: number; blindSpot?: boolean }) {
   const activeIdx = STAGES.findIndex((s) => s.key === view.stage);
   const doneCount = view.finished ? STAGES.length : Math.max(activeIdx, 0);
+  const n = STAGES.length, half = 50 / n;
+  const bsOn = blindSpot || view.bs.enabled;
   return (
     <Card>
       <CardHead step={step} title="Agent pipeline" right={view.stopReason ? <span className="text-[12.5px] text-muted">Stopped: {view.stopReason}</span> : null} />
-      <div className="relative px-4 pb-4 pt-5">
-        <div className="absolute left-[calc(8.33%+16px)] right-[calc(8.33%+16px)] top-[38px] h-[2px] rounded-full bg-line" />
-        <m.div className="absolute left-[calc(8.33%+16px)] top-[38px] h-[2px] origin-left rounded-full bg-gradient-to-r from-accent to-accent-2"
-          style={{ width: "calc(83.33% - 32px)" }} initial={{ scaleX: 0 }}
-          animate={{ scaleX: Math.min(1, doneCount / (STAGES.length - 1)) }} transition={spring.gentle} />
+      <div className="relative overflow-x-auto px-4 pb-4 pt-5">
+        <div className="absolute top-[38px] h-[2px] rounded-full bg-line" style={{ left: `calc(${half}% + 16px)`, right: `calc(${half}% + 16px)` }} />
+        <m.div className="absolute top-[38px] h-[2px] origin-left rounded-full bg-gradient-to-r from-accent to-accent-2"
+          style={{ left: `calc(${half}% + 16px)`, width: `calc(${100 - 2 * half}% - 32px)` }} initial={{ scaleX: 0 }}
+          animate={{ scaleX: Math.min(1, doneCount / (n - 1)) }} transition={spring.gentle} />
         <LayoutGroup id="pipeline">
-          <div className="relative grid grid-cols-6">
+          <div className="relative grid min-w-[460px] grid-cols-7">
             {STAGES.map((s) => {
               const active = view.stage === s.key, done = view.reached.has(s.key) && !active;
+              const intel = s.key === "blindspot";
+              const off = intel && !bsOn;
               return (
-                <div key={s.key} className="flex flex-col items-center gap-1.5 text-center">
+                <div key={s.key} className={clsx("flex flex-col items-center gap-1.5 text-center", off && "opacity-40")} title={off ? "Blind Spot Intelligence is off for this run" : undefined}>
                   <div className="relative grid h-11 w-11 place-items-center">
                     {active && <m.span layoutId="stage-glow" transition={spring.smooth}
-                      className="absolute inset-0 rounded-[14px] border border-accent bg-accent/15 shadow-glow" />}
-                    {active && <m.span className="absolute inset-0 rounded-[14px] border border-accent" animate={{ scale: [1, 1.35], opacity: [0.6, 0] }} transition={{ repeat: Infinity, duration: 1.4 }} />}
+                      className={clsx("absolute inset-0 rounded-[14px] border", intel ? "border-intel bg-intel/20 shadow-[0_0_30px_-6px_rgb(var(--intel))]" : "border-accent bg-accent/15 shadow-glow")} />}
+                    {active && <m.span className={clsx("absolute inset-0 rounded-[14px] border", intel ? "border-intel" : "border-accent")} animate={{ scale: [1, 1.35], opacity: [0.6, 0] }} transition={{ repeat: Infinity, duration: 1.4 }} />}
                     <m.span animate={{ scale: active ? 1.08 : 1 }} transition={spring.bouncy}
                       className={clsx("relative grid h-11 w-11 place-items-center rounded-[14px] border text-[18px] transition-colors",
-                        active ? "border-transparent" : done ? "border-ok/50 bg-ok/10" : "border-line bg-panel-2")}>{s.icon}</m.span>
+                        active ? "border-transparent" : done && !off ? (intel ? "border-intel/50 bg-intel/10" : "border-ok/50 bg-ok/10") : intel ? "border-intel/30 bg-intel/5" : "border-line bg-panel-2")}>{s.icon}</m.span>
                   </div>
-                  <span className={clsx("text-[12px] font-semibold", active ? "text-ink" : "text-ink-2")}>{s.label}</span>
-                  <span className="hidden text-[11px] text-muted sm:block">{s.who}</span>
+                  <span className={clsx("text-[12px] font-semibold", active ? "text-ink" : intel ? "text-intel" : "text-ink-2")}>{s.label}</span>
+                  <span className="hidden text-[11px] text-muted sm:block">{off ? "off" : s.who}</span>
                 </div>
               );
             })}
@@ -127,19 +133,59 @@ export function ActivityFeed({ view, running }: { view: RunView; running: boolea
   );
 }
 
-function MutantCard({ m: mu, onOpen }: { m: Survivor; onOpen: () => void }) {
+function MutantCard({ m: mu, onOpen, diagnosis, onInvestigate }: { m: Survivor; onOpen: () => void; diagnosis?: Diagnosis; onInvestigate?: () => void }) {
   return (
-    <m.button variants={rise} layout onClick={onOpen} whileHover={{ y: -2 }} className="card w-full p-3 text-left">
-      <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
-        <span className="rounded-md bg-accent/15 px-1.5 py-0.5 font-mono text-[11.5px] font-bold text-accent">{mu.operator}</span>
-        <span>line {mu.lineno}{mu.function ? <> · <b className="text-ink-2">{mu.function}</b></> : null}</span>
-        <span className="ml-auto font-mono">#{mu.id}</span>
-      </div>
-      <div className="mt-2 overflow-hidden rounded-lg border border-line font-mono text-[12.5px]">
-        <div className="bg-bad/10 px-3 py-1"><span className="text-bad">− </span>{mu.original}</div>
-        <div className="bg-ok/10 px-3 py-1"><span className="text-ok">+ </span>{mu.mutated}</div>
-      </div>
-    </m.button>
+    <m.div variants={rise} layout whileHover={{ y: -2 }} className="card w-full p-3 text-left">
+      <button onClick={onOpen} className="block w-full text-left">
+        <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+          <span className="rounded-md bg-accent/15 px-1.5 py-0.5 font-mono text-[11.5px] font-bold text-accent">{mu.operator}</span>
+          <span>line {mu.lineno}{mu.function ? <> · <b className="text-ink-2">{mu.function}</b></> : null}</span>
+          {diagnosis && <Badge tone="intel">{diagnosis.blind_spot_id} · {PRIMARY[diagnosis.primary_category].label}</Badge>}
+          <span className="ml-auto font-mono">#{mu.id}</span>
+        </div>
+        <div className="mt-2 overflow-hidden rounded-lg border border-line font-mono text-[12.5px]">
+          <div className="bg-bad/10 px-3 py-1"><span className="text-bad">− </span>{mu.original}</div>
+          <div className="bg-ok/10 px-3 py-1"><span className="text-ok">+ </span>{mu.mutated}</div>
+        </div>
+      </button>
+      {onInvestigate && (
+        <div className="mt-2 flex items-center gap-2">
+          {diagnosis && <span className="min-w-0 flex-1 truncate text-[12px] text-muted" title={diagnosis.diagnosis}>{diagnosis.diagnosis}</span>}
+          <Button size="sm" icon="brain" className="ml-auto border-intel/40 text-intel" onClick={onInvestigate}>Investigate Blind Spot</Button>
+        </div>
+      )}
+    </m.div>
+  );
+}
+
+function BlindSpotTab({ view, report, runId }: { view: RunView; report: RunView["report"]; runId?: string | null }) {
+  const bsReport = (report as unknown as { blind_spot?: { corrective_tests: { blind_spot_id: string; test_name: string; origin: string | null; resolved: boolean; in_suite: boolean; code: string | null; primary_category: string; round: number }[]; summary: Record<string, any> } } | null)?.blind_spot;
+  const items = bsReport ? bsReport.corrective_tests.map((c) => ({ id: c.blind_spot_id, name: c.test_name, origin: c.origin, resolved: c.resolved, inSuite: c.in_suite, code: c.code, cat: c.primary_category, round: c.round }))
+    : view.bs.corrective.map((c) => ({ id: c.blind_spot_id, name: c.name, origin: c.origin, resolved: c.resolved, inSuite: c.resolved, code: c.code, cat: "", round: 0 }));
+  if (!view.bs.enabled && !bsReport) return <EmptyState icon="brain" title="Blind Spot Intelligence was off">Turn it on in the configuration to diagnose surviving mutants and add verified corrective tests.</EmptyState>;
+  if (!items.length) return <EmptyState icon="brain" title="No corrective tests yet">{view.finished ? "No blind spot produced a verifiable corrective test in this run." : "Corrective tests appear here as blind spots are diagnosed."}</EmptyState>;
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <p className="text-[12.5px] text-muted">Targeted corrective tests written to eliminate diagnosed blind spots, separate from the ordinary generated tests.
+        {bsReport && ` ${bsReport.summary.resolved} of ${bsReport.summary.discovered} blind spots resolved.`}
+        {bsReport && runId && <> Report: {(["html", "json", "csv"] as const).map((f) => (
+          <a key={f} className="ml-1 font-semibold text-accent hover:underline" target={f === "html" ? "_blank" : undefined} rel="noopener"
+            href={`/api/blindspot/runs/${runId}/export?format=${f}`}>{f === "html" ? "printable (PDF)" : f.toUpperCase()}</a>))}</>}</p>
+      <m.div variants={stagger(0.04)} initial="hidden" animate="show" className="flex flex-col gap-2.5">
+        {items.map((c) => (
+          <m.div key={`${c.id}-${c.name}`} variants={rise} className={clsx("overflow-hidden rounded-xl border", c.resolved ? "border-ok/40" : "border-line")}>
+            <div className="flex flex-wrap items-center gap-2 border-b border-line bg-panel-2/60 px-3 py-2 text-[12px]">
+              <span className="font-mono font-bold text-intel">{c.id}</span>
+              <span className="font-mono">{c.name}</span>
+              {c.cat && <Badge tone="intel">{PRIMARY[c.cat as keyof typeof PRIMARY]?.label ?? c.cat}</Badge>}
+              <Badge tone={c.resolved ? "ok" : "muted"}>{c.resolved ? "✓ verified" : "not verified"}</Badge>
+              <span className="ml-auto text-muted">{c.origin === "counterexample" ? "from counterexample" : c.origin === "llm" ? "LLM, from evidence" : c.origin === "writer" ? "Writer refinement" : ""}{c.inSuite ? " · in final suite" : ""}</span>
+            </div>
+            {c.code ? <CodeView code={c.code} maxHeight={200} /> : <p className="px-3 py-2 text-[12px] text-muted">Killed by {c.name} from the Writer's targeted refinement (see Generated tests).</p>}
+          </m.div>
+        ))}
+      </m.div>
+    </div>
   );
 }
 
@@ -153,9 +199,12 @@ const OPERATOR_HELP: Record<string, string> = {
   ASR: "Augmented assignment replacement: += becomes -=",
 };
 
-export function ResultsTabs({ view, moduleName }: { view: RunView; moduleName: string }) {
+export function ResultsTabs({ view, moduleName, runId }: { view: RunView; moduleName: string; runId?: string | null }) {
   const { toast } = useApp();
-  const [tab, setTab] = useState<"chart" | "tests" | "mutants" | "details">("chart");
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<"chart" | "tests" | "blindspot" | "mutants" | "details">("chart");
+  const bsDiag = new Map((((view.report as unknown as { blind_spot?: { diagnoses: Diagnosis[] } } | null)?.blind_spot?.diagnoses) ?? []).map((d) => [d.mutant_id, d]));
+  const correctiveCount = (view.report as unknown as { blind_spot?: { corrective_tests: unknown[] } } | null)?.blind_spot?.corrective_tests.length ?? view.bs.corrective.length;
   const [open, setOpen] = useState<Survivor | null>(null);
   const r = view.report, it = view.iterations;
   const tests = r?.final_tests || "";
@@ -167,6 +216,7 @@ export function ResultsTabs({ view, moduleName }: { view: RunView; moduleName: s
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: "chart", label: "Progress" },
         { value: "tests", label: "Generated tests", count: last?.tests_total ?? 0 },
+        { value: "blindspot", label: "Blind Spot Refinement", count: correctiveCount },
         { value: "mutants", label: "Surviving mutants", count: r?.survivors.length ?? 0 },
         { value: "details", label: "Run details" },
       ]} />
@@ -196,6 +246,7 @@ export function ResultsTabs({ view, moduleName }: { view: RunView; moduleName: s
               <CodeView code={tests} />
             </div>
           ) : <EmptyState icon="code" title="No tests yet">The final test file appears here when the run finishes.</EmptyState>)}
+          {tab === "blindspot" && <BlindSpotTab view={view} report={r} runId={runId} />}
           {tab === "mutants" && (
             <div className="p-4">
               {!r ? <EmptyState icon="dna" title="No results yet" /> : r.survivors.length === 0 ? (
@@ -204,7 +255,8 @@ export function ResultsTabs({ view, moduleName }: { view: RunView; moduleName: s
                 <>
                   <p className="mb-3 text-[12.5px] text-muted">{r.survivors.length} planted bug(s) were not caught. Some may be <b className="text-ink-2">equivalent</b>: no test can tell them apart from the original. Click one for details.</p>
                   <m.div variants={stagger(0.04)} initial="hidden" animate="show" className="grid gap-2.5">
-                    {r.survivors.map((s) => <MutantCard key={s.id} m={s} onOpen={() => setOpen(s)} />)}
+                    {r.survivors.map((s) => <MutantCard key={s.id} m={s} onOpen={() => setOpen(s)} diagnosis={bsDiag.get(s.id)}
+                      onInvestigate={runId && view.finished ? () => navigate(`/blindspot?run=${runId}&mutant=${s.id}`) : undefined} />)}
                   </m.div>
                 </>
               )}
@@ -223,6 +275,10 @@ export function ResultsTabs({ view, moduleName }: { view: RunView; moduleName: s
                     ["Time", `${r.elapsed_s} s`],
                     ["Tokens (in / out)", `${r.total_input_tokens.toLocaleString()} / ${r.total_output_tokens.toLocaleString()}`],
                     ["Estimated cost", `$${r.cost_usd}`],
+                    ...(((r as unknown as { blind_spot?: { summary: Record<string, any> } }).blind_spot) ? (() => {
+                      const sm = (r as unknown as { blind_spot: { summary: Record<string, any> } }).blind_spot.summary;
+                      return [["Blind Spot Intelligence", `${sm.discovered} blind spots · ${sm.resolved} resolved (verified) · ${sm.unresolved} unresolved · ${sm.confirmed} confirmed / ${sm.hypotheses} hypotheses / ${sm.inconclusive} inconclusive · ${sm.potential_equivalent} possibly equivalent`]] as [string, string][];
+                    })() : []),
                   ].map(([k, v]) => (
                     <tr key={k as string} className="border-b border-line last:border-0"><th className="w-44 py-2 pr-4 text-left text-[12px] font-semibold text-muted">{k}</th><td className="py-2">{v}</td></tr>
                   ))}

@@ -63,6 +63,13 @@ CONFIGS: dict[str, Config] = {
     "ollama_no_planner": replace(BASE, llm="ollama", use_planner=False),
     "ollama_no_fixer": replace(BASE, llm="ollama", use_fixer=False),
     "ollama_no_feedback": replace(BASE, llm="ollama", use_mutation_feedback=False),
+    # TestForge + Blind Spot Intelligence: the full pipeline plus the diagnosis /
+    # counterexample / verified-corrective-test agent. Compare with *_full
+    # (same modules, operators, rounds and target).
+    "mock_blindspot": replace(BASE, llm="mock", use_blind_spot=True),
+    "groq_blindspot": replace(BASE, llm="groq", effort="medium", use_blind_spot=True),
+    "claude_blindspot": replace(BASE, llm="claude", use_blind_spot=True),
+    "ollama_blindspot": replace(BASE, llm="ollama", use_blind_spot=True),
 }
 
 # BASE was built with the mock backend, so replace() would carry its model
@@ -72,7 +79,16 @@ CONFIGS = {name: replace(cfg, model=None) for name, cfg in CONFIGS.items()}
 RUN_FIELDS = ["module", "config", "rep", "status", "stop_reason", "tests", "line_coverage",
               "branch_coverage", "mutation_score_initial", "mutation_score_final",
               "mutants_total", "mutants_equivalent", "refine_rounds", "input_tokens",
-              "output_tokens", "cost_usd", "elapsed_s", "error"]
+              "output_tokens", "cost_usd", "elapsed_s", "error",
+              # added for the Blind Spot Intelligence comparison
+              "mutation_score_raw_initial", "mutation_score_raw_final", "holdout_score_initial",
+              "holdout_score_final", "mutants_killed_initial", "mutants_killed_final", "blind_spots",
+              "blind_spots_resolved", "confirmed_diagnoses", "potential_equivalent",
+              "corrective_tests_valid", "corrective_tests_proposed"]
+DIAG_FIELDS = ["module", "config", "rep", "blind_spot_id", "mutant_id", "line", "function", "operator",
+               "original", "mutated", "primary_category", "secondary_labels", "finding_status",
+               "evidence_strength", "suggested_input", "resolution_status", "test_origin", "manual_label",
+               "manual_notes"]
 ITER_FIELDS = ["module", "config", "rep", "iteration", "tests_total", "line_coverage",
                "branch_coverage", "mutation_score", "mutants_survived", "input_tokens",
                "output_tokens", "elapsed_s"]
@@ -96,7 +112,30 @@ def run_one(module: Path, name: str, cfg: Config, rep: int) -> tuple[dict, list[
                mutation_score_final=last.mutation_score, mutants_total=last.mutants_total,
                mutants_equivalent=last.mutants_equivalent, refine_rounds=len(report.iterations) - 1,
                input_tokens=report.total_input_tokens, output_tokens=report.total_output_tokens,
-               cost_usd=report.cost_usd, elapsed_s=report.elapsed_s, error="")
+               cost_usd=report.cost_usd, elapsed_s=report.elapsed_s, error="",
+               mutation_score_raw_initial=first.mutation_score_raw, mutation_score_raw_final=last.mutation_score_raw,
+               holdout_score_initial=first.holdout_score, holdout_score_final=last.holdout_score,
+               mutants_killed_initial=first.mutants_killed, mutants_killed_final=last.mutants_killed,
+               blind_spots=last.blind_spots, blind_spots_resolved=last.blind_spots_resolved)
+    bs = report.blind_spot or {}
+    diags = bs.get("diagnoses", [])
+    proposed = [d for d in diags if d.get("proposed_test")]
+    row.update(confirmed_diagnoses=sum(1 for d in diags if d["finding_status"] == "confirmed") if bs else "",
+               potential_equivalent=sum(1 for d in diags if "Potential equivalent mutant" in d["secondary_labels"])
+               if bs else "",
+               corrective_tests_proposed=len(proposed) if bs else "",
+               corrective_tests_valid=sum(1 for d in proposed if d["verification"]["passes_on_original"])
+               if bs else "")
+    if diags:
+        row["_diagnoses"] = [{"module": module.stem, "config": name, "rep": rep, "blind_spot_id": d["blind_spot_id"],
+                              "mutant_id": d["mutant_id"], "line": d["source_line"], "function": d["function_name"],
+                              "operator": d["mutation_operator"], "original": d["original_code"],
+                              "mutated": d["mutated_code"], "primary_category": d["primary_category"],
+                              "secondary_labels": "; ".join(d["secondary_labels"]),
+                              "finding_status": d["finding_status"], "evidence_strength": d["evidence_strength"],
+                              "suggested_input": d["suggested_input"] or "", "resolution_status": d["resolution_status"],
+                              "test_origin": d["test_origin"] or "", "manual_label": "", "manual_notes": ""}
+                             for d in diags]
     iters = [{"module": module.stem, "config": name, "rep": rep, "iteration": it.iteration,
               "tests_total": it.tests_total, "line_coverage": it.line_coverage,
               "branch_coverage": it.branch_coverage, "mutation_score": it.mutation_score,
@@ -107,10 +146,30 @@ def run_one(module: Path, name: str, cfg: Config, rep: int) -> tuple[dict, list[
 
 
 def save(out: Path, rows: list[dict], iters: list[dict]) -> None:
+    diags = [d for r in rows for d in r.get("_diagnoses", [])]
+    if diags:
+        # diagnoses.csv: one row per blind spot, with empty manual_label/manual_notes
+        # columns for the manual review used to measure diagnosis accuracy
+        # (experiments/analyze.py reads them back). Existing labels are kept.
+        path = out / "diagnoses.csv"
+        old = {}
+        if path.exists():
+            for r in csv.DictReader(open(path, encoding="utf-8")):
+                old[(r["module"], r["config"], r["rep"], r["mutant_id"])] = r
+        merged = {(str(d["module"]), d["config"], str(d["rep"]), str(d["mutant_id"])): d for d in diags}
+        for k, r in old.items():
+            if k in merged:
+                merged[k]["manual_label"], merged[k]["manual_notes"] = r.get("manual_label", ""), r.get("manual_notes", "")
+            else:
+                merged[k] = r
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, DIAG_FIELDS)
+            w.writeheader()
+            w.writerows({k: v.get(k, "") for k in DIAG_FIELDS} for v in merged.values())
     with open(out / "runs.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, RUN_FIELDS)
         w.writeheader()
-        w.writerows({k: r.get(k, "") for k in RUN_FIELDS} for r in rows)
+        w.writerows({k: ("" if r.get(k) is None else r.get(k, "")) for k in RUN_FIELDS} for r in rows)
     with open(out / "iterations.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, ITER_FIELDS)
         w.writeheader()
@@ -170,6 +229,8 @@ def main() -> int:
     p.add_argument("--claude-model", default=None, help="model for claude_* configs")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--out", default=str(ROOT / "results"))
+    p.add_argument("--holdout", type=float, default=0.0,
+                   help="fraction of mutants held out from all agents and scored separately (e.g. 0.3)")
     p.add_argument("--resume", action="store_true",
                    help="keep successful runs already in --out and only run the rest "
                         "(for spreading a sweep over several days of a free tier)")
@@ -199,6 +260,8 @@ def main() -> int:
         return 1
 
     for n in names:
+        if a.holdout:
+            CONFIGS[n] = replace(CONFIGS[n], holdout_fraction=a.holdout)
         if CONFIGS[n].llm == "ollama" and a.ollama_model:
             CONFIGS[n] = replace(CONFIGS[n], model=a.ollama_model)
         if CONFIGS[n].llm == "claude" and a.claude_model:

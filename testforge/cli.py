@@ -31,6 +31,10 @@ def _print_event(kind: str, data: dict) -> None:
         print(f"  {data.get('emoji', '')} {data['agent']}: {data['message']}")
     elif kind == "error":
         print(f"  !! {data['message']}", file=sys.stderr)
+    elif kind == "blindspot" and data.get("type") in (
+            "analysis_started", "counterexample_found", "blind_spot_discovered", "blind_spot_resolved",
+            "blind_spot_unresolved", "analysis_completed", "analysis_failed", "analysis_cancelled"):
+        print(f"  🧠 {data['text']}")
 
 
 def cmd_generate(a: argparse.Namespace) -> int:
@@ -39,7 +43,9 @@ def cmd_generate(a: argparse.Namespace) -> int:
                  max_refine_iterations=a.max_iterations, target_mutation_score=a.target,
                  use_planner=not a.no_planner, use_fixer=not a.no_fixer,
                  use_mutation_feedback=not a.no_mutation_feedback,
-                 mutation_workers=a.workers, max_mutants=a.max_mutants)
+                 mutation_workers=a.workers, max_mutants=a.max_mutants,
+                 use_blind_spot=a.blind_spot, holdout_fraction=a.holdout,
+                 max_total_tokens=a.max_tokens, max_seconds=a.max_seconds)
     try:
         report = Orchestrator(cfg, on_event=_print_event).run(a.module)
     except LLMError as e:
@@ -232,6 +238,11 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--no-mutation-feedback", action="store_true")
     g.add_argument("--workers", type=int, default=4)
     g.add_argument("--max-mutants", type=int, default=None)
+    g.add_argument("--blind-spot", action="store_true",
+                   help="Blind Spot Intelligence: diagnose surviving mutants and add verified corrective tests")
+    g.add_argument("--holdout", type=float, default=0.0, help="fraction of mutants held out from the agents")
+    g.add_argument("--max-tokens", type=int, default=None, help="stop refining after this many LLM tokens")
+    g.add_argument("--max-seconds", type=float, default=None, help="stop refining after this many seconds")
     g.set_defaults(func=cmd_generate)
 
     m = sub.add_parser("mutate", help="mutation-score an existing test suite")

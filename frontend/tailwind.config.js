@@ -12,6 +12,7 @@ export default {
         ink: v("ink"), "ink-2": v("ink-2"), muted: v("muted"),
         accent: v("accent"), "accent-2": v("accent-2"),
         ok: v("ok"), bad: v("bad"), warn: v("warn"), info: v("info"),
+        intel: v("intel"), "intel-2": v("intel-2"),
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],

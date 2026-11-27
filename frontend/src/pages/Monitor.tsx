@@ -35,6 +35,7 @@ const KIND: Record<string, { label: string; color: string }> = {
   mutant_run: { label: "Mutant run", color: "rgb(var(--warn))" },
   probe: { label: "Sandbox probe", color: "rgb(var(--ok))" },
   ui_scenario: { label: "UI scenario", color: "rgb(var(--info))" },
+  blindspot: { label: "Blind spot evidence", color: "rgb(var(--intel))" },
 };
 
 function EdgeLine({ x1, y1, x2, y2, delay }: { x1: number; y1: number; x2: number; y2: number; delay: number }) {

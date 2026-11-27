@@ -32,7 +32,11 @@ MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]
 ORDER = ["mock_baseline", "claude_single_shot", "claude_full", "claude_no_planner", "claude_no_fixer",
          "claude_no_feedback", "ollama_single_shot", "ollama_full", "ollama_no_planner",
          "ollama_no_fixer", "ollama_no_feedback", "groq_single_shot", "groq_full",
-         "groq_no_planner", "groq_no_fixer", "groq_no_feedback"]
+         "groq_no_planner", "groq_no_fixer", "groq_no_feedback",
+         "mock_blindspot", "claude_blindspot", "ollama_blindspot", "groq_blindspot"]
+# Baseline of each "TestForge + Blind Spot Intelligence" configuration
+BLINDSPOT_PAIRS = [("mock_baseline", "mock_blindspot"), ("claude_full", "claude_blindspot"),
+                   ("ollama_full", "ollama_blindspot"), ("groq_full", "groq_blindspot")]
 LABELS = {
     "mock_baseline": "Non-LLM baseline", "claude_single_shot": "Claude, single prompt",
     "claude_full": "Claude, TestForge", "claude_no_planner": "Claude, no Planner",
@@ -43,6 +47,8 @@ LABELS = {
     "groq_single_shot": "gpt-oss-120b, single prompt", "groq_full": "gpt-oss-120b, TestForge",
     "groq_no_planner": "gpt-oss-120b, no Planner", "groq_no_fixer": "gpt-oss-120b, no Fixer",
     "groq_no_feedback": "gpt-oss-120b, no feedback",
+    "mock_blindspot": "Non-LLM + Blind Spot Intelligence", "claude_blindspot": "Claude, TestForge + Blind Spot",
+    "ollama_blindspot": "Local model, TestForge + Blind Spot", "groq_blindspot": "gpt-oss-120b, TestForge + Blind Spot",
 }
 
 
@@ -316,6 +322,8 @@ def report(runs, iters, configs, directory: Path, figures: list[str]) -> str:
               f"(Wilcoxon p = {'n/a' if p is None else f'{p:.4f}'}, A12 = "
               f"{a12([fin[m] for m in common], [ini[m] for m in common]):.2f})."]
 
+    L += blindspot_section(runs, configs, directory)
+
     L += ["", "## Per-module mutation score (final, with initial in brackets)", "",
           "| Module | " + " | ".join(label(c) for c in configs) + " |", "|---" * (len(configs) + 1) + "|"]
     for m in sorted({r["module"] for r in runs}):
@@ -329,6 +337,122 @@ def report(runs, iters, configs, directory: Path, figures: list[str]) -> str:
     text = "\n".join(L) + "\n"
     (directory / "analysis.md").write_text(text, encoding="utf-8")
     return text
+
+
+def _mean(values):
+    v = [x for x in values if x is not None]
+    return statistics.mean(v) if v else None
+
+
+def blindspot_section(runs, configs, directory: Path) -> list[str]:
+    """Original pipeline vs TestForge + Blind Spot Intelligence, from recorded runs only."""
+    L: list[str] = []
+    pairs = [(a, b) for a, b in BLINDSPOT_PAIRS if a in configs and b in configs]
+    if not pairs:
+        return L
+    L += ["", "## Blind Spot Intelligence vs the original pipeline", "",
+          "Same modules, mutation operators, round limit and target; the Blind Spot configuration adds the "
+          "diagnosis / counterexample / verified-corrective-test agent. *Raw* scores count every mutant the "
+          "Writer flagged as equivalent as a survivor (LLM judgement is not trusted to shrink the denominator). "
+          "*Held-out* scores use mutants hidden from every agent (when the sweep ran with `--holdout`)."]
+    metrics = [("Initial mutation score", "mutation_score_initial", True), ("Final mutation score", "mutation_score_final", True),
+               ("Final raw score", "mutation_score_raw_final", True), ("Held-out score (final)", "holdout_score_final", True),
+               ("Held-out score (initial)", "holdout_score_initial", True), ("Tests", "tests", False),
+               ("Refinement rounds", "refine_rounds", False), ("Input + output tokens", None, False),
+               ("Time (s)", "elapsed_s", False), ("Cost (USD)", "cost_usd", False)]
+    for a, b in pairs:
+        L += ["", f"### {label(b)} vs {label(a)}", "", f"| Metric | {label(a)} | {label(b)} |", "|---|---|---|"]
+        for name, key, pct in metrics:
+            vals = []
+            for c in (a, b):
+                rows = [r for r in runs if r["config"] == c]
+                if key is None:
+                    v = _mean((r.get("input_tokens") or 0) + (r.get("output_tokens") or 0) for r in rows)
+                else:
+                    v = _mean(r.get(key) for r in rows)
+                vals.append("–" if v is None else (f"{v:.1%}" if pct else f"{v:,.2f}"))
+            L.append(f"| {name} | {vals[0]} | {vals[1]} |")
+        rb = [r for r in runs if r["config"] == b]
+        found = sum(r.get("blind_spots") or 0 for r in rb)
+        res = sum(r.get("blind_spots_resolved") or 0 for r in rb)
+        prop = sum(r.get("corrective_tests_proposed") or 0 for r in rb)
+        valid = sum(r.get("corrective_tests_valid") or 0 for r in rb)
+        conf = sum(r.get("confirmed_diagnoses") or 0 for r in rb)
+        eqv = sum(r.get("potential_equivalent") or 0 for r in rb)
+        L += ["", f"- Blind spots diagnosed: **{found}** over {len(rb)} modules; verified resolutions: **{res}** "
+                  f"({res / found:.0%} of diagnosed)." if found else f"- No blind spots were diagnosed over {len(rb)} modules.",
+              f"- Confirmed diagnoses (measured category + distinguishing input or observed difference): {conf}.",
+              f"- Corrective test validity: {valid} of {prop} proposed corrective tests passed on the original program"
+              + (f" ({valid / prop:.0%})." if prop else "."),
+              f"- Suspected equivalent mutants (no distinguishing input found; reported, not removed): {eqv}."]
+        for c in (a, b):
+            rows = [r for r in runs if r["config"] == c]
+            gained = sum((r.get("mutants_killed_final") or 0) - (r.get("mutants_killed_initial") or 0) for r in rows)
+            secs = sum(r.get("elapsed_s") or 0 for r in rows)
+            cost = sum(r.get("cost_usd") or 0 for r in rows)
+            toks = sum((r.get("input_tokens") or 0) + (r.get("output_tokens") or 0) for r in rows)
+            if gained > 0:
+                L.append(f"- {label(c)}: {gained} additional mutants killed by refinement; "
+                         f"{secs / gained:.1f} s, {toks / gained:,.0f} tokens and ${cost / gained:.4f} per additional killed mutant.")
+            elif any(r.get("mutants_killed_final") is not None for r in rows):
+                L.append(f"- {label(c)}: no additional mutants killed by refinement.")
+        L += ["", "| Comparison (paired by module) | Mean difference | p-value | A12 |", "|---|---|---|---|"]
+        for name, key in (("Final score", "mutation_score_final"), ("Raw score", "mutation_score_raw_final"),
+                          ("Held-out score", "holdout_score_final")):
+            xa, xb = per_module(runs, b, key), per_module(runs, a, key)
+            common = sorted(set(xa) & set(xb))
+            if len(common) < 2:
+                continue
+            x, y = [xa[m] for m in common], [xb[m] for m in common]
+            p, _ = wilcoxon_exact(x, y)
+            L.append(f"| {name}: {label(b)} vs {label(a)} | {statistics.mean(i - j for i, j in zip(x, y)) * 100:+.1f} pts | "
+                     f"{'n/a' if p is None else f'{p:.4f}'} | {a12(x, y):.2f} |")
+
+    diag = directory / "diagnoses.csv"
+    if diag.exists():
+        rows = list(csv.DictReader(open(diag, encoding="utf-8")))
+        labelled = [r for r in rows if (r.get("manual_label") or "").strip()]
+        L += ["", "### Diagnosis accuracy", ""]
+        if not labelled:
+            L.append(f"`diagnoses.csv` lists {len(rows)} diagnoses. No manual labels yet: fill the `manual_label` "
+                     "column (reachability / infection / propagation / revealability / inconclusive) for a sample "
+                     "and re-run this script to measure agreement.")
+        else:
+            agree = sum(1 for r in labelled if r["manual_label"].strip().lower() == r["primary_category"])
+            L.append(f"Agreement with manual labels: **{agree}/{len(labelled)} ({agree / len(labelled):.0%})**.")
+            cats = ["reachability", "infection", "propagation", "revealability", "inconclusive"]
+            L += ["", "| Manual \\ Engine | " + " | ".join(cats) + " |", "|---" * (len(cats) + 1) + "|"]
+            for mc in cats:
+                L.append(f"| {mc} | " + " | ".join(str(sum(1 for r in labelled if r['manual_label'].strip().lower() == mc
+                                                            and r['primary_category'] == ec)) for ec in cats) + " |")
+    return L
+
+
+def fig_blindspot(plt, runs, a: str, b: str, out: Path) -> bool:
+    xa, xb = per_module(runs, a), per_module(runs, b)
+    ha, hb = per_module(runs, a, "holdout_score_final"), per_module(runs, b, "holdout_score_final")
+    mods = sorted(set(xa) & set(xb))
+    if not mods:
+        return False
+    fig, ax = plt.subplots(figsize=(max(7, len(mods) * 0.55), 4.2))
+    idx = range(len(mods))
+    w = 0.38
+    ax.bar([i - w / 2 for i in idx], [xa[m] * 100 for m in mods], w, label=label(a), color="#7c8db5")
+    ax.bar([i + w / 2 for i in idx], [xb[m] * 100 for m in mods], w, label=label(b), color="#a855f7")
+    if ha and hb:
+        ax.scatter([i - w / 2 for i in idx if mods[i] in ha], [ha[mods[i]] * 100 for i in idx if mods[i] in ha],
+                   marker="_", s=160, color="#1f2937", label="held-out score", zorder=3)
+        ax.scatter([i + w / 2 for i in idx if mods[i] in hb], [hb[mods[i]] * 100 for i in idx if mods[i] in hb],
+                   marker="_", s=160, color="#1f2937", zorder=3)
+    ax.set_xticks(list(idx))
+    ax.set_xticklabels(mods, rotation=40, ha="right")
+    ax.set_ylabel("Final mutation score (%)")
+    ax.set_ylim(0, 105)
+    ax.legend(frameon=False, fontsize=9)
+    fig.tight_layout()
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+    return True
 
 
 def main() -> int:
@@ -360,6 +484,9 @@ def main() -> int:
     for backend in ("claude", "ollama", "groq"):
         if fig_ablation(plt, runs, backend, figdir / f"ablation_{backend}.png"):
             figures.append(f"ablation_{backend}.png")
+    for a, b in BLINDSPOT_PAIRS:
+        if a in configs and b in configs and fig_blindspot(plt, runs, a, b, figdir / f"blindspot_{b}.png"):
+            figures.append(f"blindspot_{b}.png")
     print(report(runs, iters, configs, directory, figures))
     print(f"Figures in {figdir}/")
     return 0

@@ -62,7 +62,7 @@ function Replay({ rec }: { rec: HistoryRecord }) {
       <KpiGrid view={view} />
       <div className="grid items-start gap-5 2xl:grid-cols-2">
         <ActivityFeed view={view} running={playing} />
-        <ResultsTabs view={view} moduleName={moduleName} />
+        <ResultsTabs view={view} moduleName={moduleName} runId={rec.id} />
       </div>
     </div>
   );

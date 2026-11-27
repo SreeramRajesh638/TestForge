@@ -148,6 +148,8 @@ class Mutant:
     mutated: str
     function: str | None = None
     status: str = "pending"   # killed | survived | timeout | equivalent | error
+    node_index: int = -1      # index of the mutated AST node in the engine's walk order
+    killed_by: str | None = None  # first test that failed on this mutant (when recorded)
 
     def describe(self) -> str:
         where = f" in {self.function}" if self.function else ""
@@ -201,6 +203,10 @@ class IterationRecord:
     input_tokens: int
     output_tokens: int
     elapsed_s: float
+    mutation_score_raw: float | None = None   # equivalent-flagged mutants counted as survivors
+    holdout_score: float | None = None        # kill rate of held-out mutants (if any)
+    blind_spots: int = 0                      # blind spots diagnosed so far
+    blind_spots_resolved: int = 0             # of those, verified resolved
 
 
 @dataclass
@@ -215,6 +221,7 @@ class RunReport:
     cost_usd: float
     elapsed_s: float
     survivors: list[dict] = field(default_factory=list)
+    blind_spot: dict | None = None            # Blind Spot Intelligence section (when enabled)
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -7,6 +7,7 @@ import { storage, useApp, useElapsed } from "../lib/store";
 import { stagger } from "../motion/variants";
 import { PageHeader } from "../components/layout/Shell";
 import { ActivityFeed, KpiGrid, Pipeline, ResultsTabs } from "../components/run/RunPanels";
+import { BlindSpotOverviewCard } from "../components/blindspot/OverviewCard";
 import { CodeEditor } from "../components/ui/code";
 import { Badge, Button, RangeField, Segmented, Switch } from "../components/ui/controls";
 import { Card, CardHead, Skeleton } from "../components/ui/display";
@@ -28,6 +29,8 @@ export default function Generate() {
   const [planner, setPlanner] = useState(true);
   const [fixer, setFixer] = useState(true);
   const [feedback, setFeedback] = useState(true);
+  const [blindSpot, setBlindSpot] = useState<boolean>(() => storage.get("blindSpot", true));
+  const [runId, setRunId] = useState<string | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [running, setRunning] = useState(false);
   const [times, setTimes] = useState<{ start: number | null; end: number | null }>({ start: null, end: null });
@@ -48,6 +51,7 @@ export default function Generate() {
     return () => stop.current?.();
   }, [loadRecent]);
   useEffect(() => storage.set("backend", backend), [backend]);
+  useEffect(() => storage.set("blindSpot", blindSpot), [blindSpot]);
 
   const run = useCallback(async () => {
     if (running) return;
@@ -58,8 +62,9 @@ export default function Generate() {
       const { run_id } = await api.startRun({
         source, module_name: name, llm: backend, model: model.trim() || null, effort,
         max_refine_iterations: rounds, target_mutation_score: target / 100,
-        use_planner: planner, use_fixer: fixer, use_mutation_feedback: feedback,
+        use_planner: planner, use_fixer: fixer, use_mutation_feedback: feedback, use_blind_spot: blindSpot && feedback,
       });
+      setRunId(run_id);
       setModuleName(name); setEvents([]); setRunning(true); setTimes({ start: Date.now(), end: null });
       stop.current = followRun(run_id, (e) => setEvents((es) => [...es, e]), (ok) => {
         setRunning(false); setTimes((t) => ({ ...t, end: Date.now() })); loadRecent();
@@ -68,7 +73,7 @@ export default function Generate() {
     } catch (e) {
       toast((e as Error).message, "bad");
     }
-  }, [running, source, status, backend, toast, name, model, effort, rounds, target, planner, fixer, feedback, loadRecent]);
+  }, [running, source, status, backend, toast, name, model, effort, rounds, target, planner, fixer, feedback, blindSpot, loadRecent]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run(); } };
@@ -130,6 +135,9 @@ export default function Generate() {
                 <Switch checked={planner} onChange={setPlanner} label="Planner agent" hint="Design test cases before writing" />
                 <Switch checked={fixer} onChange={setFixer} label="Fixer agent" hint="Repair failing tests automatically" />
                 <Switch checked={feedback} onChange={setFeedback} label="Mutation feedback" hint="Send surviving mutants back to the Writer" />
+                <Switch checked={blindSpot && feedback} onChange={setBlindSpot} tone="intel"
+                  label={<span className="flex items-center gap-2">Blind Spot Intelligence <span className="rounded-md bg-intel/15 px-1.5 text-[10.5px] font-bold text-intel">NEW</span></span>}
+                  hint={feedback ? "Diagnose why each mutant survives; add verified corrective tests" : "Needs mutation feedback"} />
               </div>
               <Button variant="primary" size="lg" magnetic icon="play" loading={running} onClick={run}>
                 {running ? "Agents at work…" : "Generate tests"} {!running && <span className="kbd">Ctrl ↵</span>}
@@ -156,10 +164,11 @@ export default function Generate() {
         </m.div>
 
         <m.div variants={stagger(0.07, 0.1)} className="flex min-w-0 flex-col gap-5 xl:sticky xl:top-6 xl:-m-1 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:p-1">
-          <Pipeline view={view} step={3} />
+          <Pipeline view={view} step={3} blindSpot={blindSpot && feedback} />
           <KpiGrid view={view} loading={running} />
+          <BlindSpotOverviewCard view={view} runId={runId} running={running} />
           <ActivityFeed view={view} running={running} />
-          <ResultsTabs view={view} moduleName={name} />
+          <ResultsTabs view={view} moduleName={name} runId={runId} />
         </m.div>
       </div>
     </m.div>

@@ -50,6 +50,20 @@ class Config:
     use_planner: bool = True
     use_fixer: bool = True
     use_mutation_feedback: bool = True
+    # Blind Spot Intelligence: diagnose surviving mutants with execution
+    # evidence and add verified corrective tests before targeted refinement.
+    # Off by default so the original pipeline stays the baseline configuration.
+    use_blind_spot: bool = False
+    blind_spot_max_investigations: int = 12   # per round, highest priority first
+
+    # Research protocol: this fraction of mutants is held out (deterministically,
+    # by hash) and never shown to the Writer or the Blind Spot agent; their kill
+    # rate is reported separately as the held-out mutation score.
+    holdout_fraction: float = 0.0
+
+    # Extra stopping conditions (None = no limit).
+    max_total_tokens: int | None = None
+    max_seconds: float | None = None
 
     # Execution limits.
     test_timeout_s: int = 60           # one pytest run of the whole suite

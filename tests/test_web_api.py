@@ -3,6 +3,7 @@
 import json
 import socket
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -101,3 +102,68 @@ def test_spa_routes_and_classic_fallback(base):
     for path in ("/", "/automation", "/monitor", "/experiments", "/runs", "/classic", "/classic/automation"):
         with urllib.request.urlopen(base + path, timeout=10) as r:
             assert r.status == 200 and b"<html" in r.read().lower()
+
+
+# ---------------------------------------------------------------- Blind Spot Intelligence
+def _wait_idle(base, sid, timeout=180):
+    end = time.time() + timeout
+    while time.time() < end:
+        st = get(base, f"/api/blindspot/sessions/{sid}")
+        if st["status"] != "running":
+            return st
+        time.sleep(0.3)
+    raise AssertionError("session still running")
+
+
+def test_blindspot_demo_session_full_workflow(base):
+    sid = post(base, "/api/blindspot/sessions", {"demo": True})["id"]
+    st = _wait_idle(base, sid)
+    assert st["status"] == "idle" and st["error"] is None
+    assert st["summary"]["discovered"] == 2 and st["summary"]["resolved"] == 0  # nothing resolved before verification
+    ror = next(d for d in st["diagnoses"] if d["mutation_operator"] == "ROR")
+    assert ror["primary_category"] == "infection" and ror["counterexample"]["args"] == ["18"]
+
+    tried = post(base, f"/api/blindspot/sessions/{sid}/blindspots/{ror['blind_spot_id']}/counterexample", {"args": ["18"]})
+    assert tried["differs"] and tried["original"]["repr"] == "True" and tried["mutant"]["repr"] == "False"
+
+    post(base, f"/api/blindspot/sessions/{sid}/resolve_all", {})
+    st = _wait_idle(base, sid)
+    assert st["summary"]["resolved"] == 2 and st["summary"]["score_after"] == 1.0
+    assert len(st["versions"]) == 2 and "test_blind_spot_" in st["tests"]
+    types = [t["type"] for t in st["timeline"]]
+    for needed in ("survivors_detected", "blind_spot_discovered", "counterexample_found",
+                   "corrective_test_generated", "verification_started", "blind_spot_resolved"):
+        assert needed in types
+
+    with urllib.request.urlopen(base + f"/api/blindspot/sessions/{sid}/export?format=csv", timeout=30) as r:
+        assert b"blind_spot_id" in r.read()
+    assert get(base, "/api/blindspot/overview")["summary"]["resolved"] == 2
+
+
+def test_blindspot_rejects_non_literal_inputs(base):
+    sid = post(base, "/api/blindspot/sessions", {"demo": True})["id"]
+    st = _wait_idle(base, sid)
+    bs = st["diagnoses"][0]["blind_spot_id"]
+    req = urllib.request.Request(base + f"/api/blindspot/sessions/{sid}/blindspots/{bs}/counterexample",
+                                 data=json.dumps({"args": ["__import__('os').system('id')"]}).encode(),
+                                 method="POST", headers={"Content-Type": "application/json"})
+    with pytest.raises(urllib.error.HTTPError) as e:
+        urllib.request.urlopen(req, timeout=30)
+    assert e.value.code == 400
+
+
+def test_generate_run_with_blind_spot_has_report_section(base):
+    src = (EXAMPLES / "blindspot_demo" / "eligibility.py").read_text()
+    rid = post(base, "/api/runs", {"source": src, "module_name": "eligibility", "llm": "mock",
+                                   "use_blind_spot": True, "max_refine_iterations": 1})["run_id"]
+    end = time.time() + 240
+    while time.time() < end:
+        res = get(base, f"/api/runs/{rid}")
+        if res["status"] != "running":
+            break
+        time.sleep(0.5)
+    bs = res["report"]["blind_spot"]
+    assert bs is not None and "summary" in bs and "heatmap" in bs
+    assert all(d["resolution_status"] != "resolved" or d["verification"]["kills_mutant"] for d in bs["diagnoses"])
+    with urllib.request.urlopen(base + f"/api/blindspot/runs/{rid}/export?format=html", timeout=30) as r:
+        assert b"Blind Spot Intelligence report" in r.read()

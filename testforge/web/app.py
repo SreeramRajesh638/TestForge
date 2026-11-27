@@ -53,6 +53,11 @@ MAX_CONCURRENT_RUNS = int(os.environ.get("TESTFORGE_MAX_RUNS", "2"))
 _running = threading.BoundedSemaphore(MAX_CONCURRENT_RUNS)
 
 
+from .blindspot_api import router as blindspot_router  # noqa: E402
+
+app.include_router(blindspot_router)
+
+
 @app.middleware("http")
 async def password_gate(request: Request, call_next):
     """Require TESTFORGE_PASSWORD (if set) for everything except /healthz."""
@@ -110,6 +115,9 @@ class RunRequest(BaseModel):
     use_planner: bool = True
     use_fixer: bool = True
     use_mutation_feedback: bool = True
+    use_blind_spot: bool = False
+    max_total_tokens: int | None = Field(None, ge=1000)
+    max_seconds: float | None = Field(None, ge=10)
 
 
 def normalize_module_name(name: str) -> str:
@@ -132,7 +140,7 @@ def normalize_module_name(name: str) -> str:
 
 
 SPA = STATIC / "app"           # React build output (frontend/ → npm run build)
-SPA_ROUTES = ("/", "/automation", "/monitor", "/experiments", "/runs")
+SPA_ROUTES = ("/", "/automation", "/monitor", "/experiments", "/runs", "/blindspot")
 
 
 NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
@@ -151,6 +159,7 @@ def index():
 @app.get("/monitor")
 @app.get("/experiments")
 @app.get("/runs")
+@app.get("/blindspot")
 def spa_pages():
     return _spa_or("index.html")
 
@@ -191,7 +200,8 @@ def start_run(req: RunRequest):
     run_id = uuid.uuid4().hex[:10]
     events: queue.Queue = queue.Queue()
     started = time.time()
-    RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running"}
+    cancel = threading.Event()
+    RUNS[run_id] = {"events": events, "history": [], "report": None, "status": "running", "cancel": cancel}
 
     def emit(kind: str, data: dict) -> None:
         item = {"kind": kind, "data": data, "t": round(time.time() - started, 3)}
@@ -209,9 +219,10 @@ def start_run(req: RunRequest):
                      max_refine_iterations=req.max_refine_iterations,
                      target_mutation_score=req.target_mutation_score,
                      use_planner=req.use_planner, use_fixer=req.use_fixer,
-                     use_mutation_feedback=req.use_mutation_feedback)
+                     use_mutation_feedback=req.use_mutation_feedback, use_blind_spot=req.use_blind_spot,
+                     max_total_tokens=req.max_total_tokens, max_seconds=req.max_seconds)
         try:
-            report = Orchestrator(cfg, on_event=emit).run(str(path))
+            report = Orchestrator(cfg, on_event=emit, cancel=cancel, session_id=run_id).run(str(path))
             RUNS[run_id]["report"] = report.to_dict()
             RUNS[run_id]["status"] = "finished"
             emit("report", RUNS[run_id]["report"])
@@ -263,6 +274,18 @@ async def run_events(run_id: str):
             yield f"data: {json.dumps(item, default=str)}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.post("/api/runs/{run_id}/cancel")
+def cancel_run(run_id: str):
+    """Ask a running generate run to stop at the next safe point (recorded as stop reason 'cancelled')."""
+    run = RUNS.get(run_id)
+    if run is None:
+        raise HTTPException(404, "unknown run")
+    if run["status"] != "running" or "cancel" not in run:
+        return {"cancelled": False}
+    run["cancel"].set()
+    return {"cancelled": True}
 
 
 @app.get("/api/runs/{run_id}")

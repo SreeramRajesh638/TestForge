@@ -4,14 +4,16 @@ import { AnimatePresence, LayoutGroup, m } from "framer-motion";
 import clsx from "clsx";
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { bsApi } from "../../lib/blindspot";
 import { useApp } from "../../lib/store";
 import { spring } from "../../motion/variants";
 import { Icon, type IconName } from "../ui/Icon";
 import { Toaster } from "../ui/display";
 import { AmbientBackground } from "./AmbientBackground";
 
-const NAV: { to: string; label: string; icon: IconName; hint: string }[] = [
+const NAV: { to: string; label: string; icon: IconName; hint: string; intel?: boolean }[] = [
   { to: "/", label: "Generate tests", icon: "code", hint: "AI agents + mutation testing" },
+  { to: "/blindspot", label: "Blind Spot Intelligence", icon: "brain", hint: "Why tests miss faults", intel: true },
   { to: "/automation", label: "UI automation", icon: "robot", hint: "Playwright scenarios" },
   { to: "/monitor", label: "System monitor", icon: "activity", hint: "Live client ↔ server flow" },
   { to: "/experiments", label: "Experiments", icon: "chart", hint: "Thesis results" },
@@ -68,7 +70,22 @@ function ThemeToggle() {
   );
 }
 
+/** Unresolved blind spots of the latest session/run (polled, and pushed by the workspace). */
+function useUnresolved(): number | null {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    const load = () => bsApi.overview().then((o) => setN(o.summary ? o.summary.unresolved : null)).catch(() => undefined);
+    load();
+    const t = window.setInterval(load, 20000);
+    const onPush = (e: Event) => setN((e as CustomEvent).detail.unresolved);
+    window.addEventListener("tf:blindspot", onPush);
+    return () => { window.clearInterval(t); window.removeEventListener("tf:blindspot", onPush); };
+  }, []);
+  return n;
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const unresolved = useUnresolved();
   return (
     <div className="flex h-full flex-col gap-1 p-4">
       <Brand />
@@ -81,12 +98,20 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               {({ isActive }) => (
                 <>
                   {isActive && <m.span layoutId="nav-active" transition={spring.snappy}
-                    className="absolute inset-0 rounded-xl border border-accent/25 bg-accent/10 shadow-[inset_2px_0_0_rgb(var(--accent))]" />}
-                  <Icon name={n.icon} size={18} className="relative" />
-                  <span className="relative min-w-0">
+                    className={clsx("absolute inset-0 rounded-xl border", n.intel ? "border-intel/30 bg-intel/10 shadow-[inset_2px_0_0_rgb(var(--intel))]" : "border-accent/25 bg-accent/10 shadow-[inset_2px_0_0_rgb(var(--accent))]")} />}
+                  <Icon name={n.icon} size={18} className={clsx("relative", n.intel && "text-intel")} />
+                  <span className="relative min-w-0 flex-1">
                     <span className="block text-[13.5px] font-semibold">{n.label}</span>
                     <span className="block truncate text-[11px] text-muted">{n.hint}</span>
                   </span>
+                  {n.intel && unresolved != null && (
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <m.span key={unresolved} title={`${unresolved} unresolved blind spot(s) in the latest session`}
+                        initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.4, opacity: 0 }} transition={spring.bouncy}
+                        className={clsx("relative min-w-[22px] rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums",
+                          unresolved > 0 ? "bg-bad/15 text-bad" : "bg-ok/15 text-ok")}>{unresolved}</m.span>
+                    </AnimatePresence>
+                  )}
                 </>
               )}
             </NavLink>

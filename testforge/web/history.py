@@ -65,7 +65,10 @@ def summarize_generate(req: dict, report: dict | None, status: str) -> dict:
             "rounds": max(0, len(final) - 1), "elapsed_s": (report or {}).get("elapsed_s"),
             "stop": (report or {}).get("stop_reason"), "status": status,
             "tokens_in": (report or {}).get("total_input_tokens"),
-            "tokens_out": (report or {}).get("total_output_tokens")}
+            "tokens_out": (report or {}).get("total_output_tokens"),
+            "blind_spot": bool(req.get("use_blind_spot")),
+            "blind_spots": ((report or {}).get("blind_spot") or {}).get("summary", {}).get("discovered"),
+            "blind_spots_resolved": ((report or {}).get("blind_spot") or {}).get("summary", {}).get("resolved")}
 
 
 def summarize_ui(req: dict, report: dict | None, status: str) -> dict:

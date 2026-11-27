@@ -27,7 +27,7 @@ from pathlib import Path
 
 from ..models import Mutant, MutationResult, ModuleInfo
 from .analysis import enclosing_function
-from .runner import run_pytest_quick
+from .runner import run_pytest_quick_detail
 
 _AOR = {ast.Add: ast.Sub, ast.Sub: ast.Add, ast.Mult: ast.Div, ast.Div: ast.Mult,
         ast.FloorDiv: ast.Div, ast.Mod: ast.Mult, ast.Pow: ast.Mult}
@@ -167,7 +167,7 @@ def generate_mutants(info: ModuleInfo, limit: int | None = None) -> list[tuple[M
             continue
         m = Mutant(id=len(results), operator=op, lineno=line,
                    original=ast.unparse(before), mutated=ast.unparse(after),
-                   function=enclosing_function(info, line))
+                   function=enclosing_function(info, line), node_index=idx)
         results.append((m, mutated_src))
     return results
 
@@ -195,8 +195,9 @@ def run_mutation_analysis(info: ModuleInfo, test_code: str, *, timeout_s: int = 
         try:
             (work / f"{info.module_name}.py").write_text(src, encoding="utf-8")
             (work / "test_generated.py").write_text(test_code, encoding="utf-8")
-            status = run_pytest_quick(work, "test_generated.py", timeout_s, extra_paths)
+            status, failing = run_pytest_quick_detail(work, "test_generated.py", timeout_s, extra_paths)
             mutant.status = {"pass": "survived", "fail": "killed", "timeout": "timeout"}.get(status, "error")
+            mutant.killed_by = failing
         finally:
             shutil.rmtree(work, ignore_errors=True)
         return mutant

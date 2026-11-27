@@ -1,4 +1,4 @@
-import { AnimatePresence, LazyMotion, m, MotionConfig } from "framer-motion";
+import { LazyMotion, m, MotionConfig } from "framer-motion";
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -14,6 +14,7 @@ const Automation = lazy(() => import("./pages/Automation"));
 const Monitor = lazy(() => import("./pages/Monitor"));
 const Experiments = lazy(() => import("./pages/Experiments"));
 const Runs = lazy(() => import("./pages/Runs"));
+const BlindSpot = lazy(() => import("./pages/BlindSpot"));
 const loadFeatures = () => import("framer-motion").then((mod) => mod.domMax);
 
 function PageFallback() {
@@ -25,11 +26,14 @@ function PageFallback() {
   );
 }
 
+/* Route changes animate the incoming page only. (An exit animation under
+ * AnimatePresence mode="wait" could get stuck after a long run and leave the
+ * old page on screen; entering-only transitions cannot block navigation.) */
 function AnimatedRoutes() {
   const location = useLocation();
   return (
-    <AnimatePresence mode="wait">
-      <m.div key={location.pathname} variants={page} initial="initial" animate="enter" exit="exit">
+    <>
+      <m.div key={location.pathname} variants={page} initial="initial" animate="enter">
         <Suspense fallback={<PageFallback />}>
           <Routes location={location}>
             <Route path="/" element={<Generate />} />
@@ -37,11 +41,12 @@ function AnimatedRoutes() {
             <Route path="/monitor" element={<Monitor />} />
             <Route path="/experiments" element={<Experiments />} />
             <Route path="/runs" element={<Runs />} />
+            <Route path="/blindspot" element={<BlindSpot />} />
             <Route path="*" element={<Generate />} />
           </Routes>
         </Suspense>
       </m.div>
-    </AnimatePresence>
+    </>
   );
 }
 

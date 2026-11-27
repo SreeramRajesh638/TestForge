@@ -21,6 +21,7 @@ the next free one is used and printed):
 | **UI automation** | Playwright scenarios against ShopLite, bug injection, step-by-step results with screenshots, bug × scenario matrix |
 | **System monitor** | Live architecture map (browser → API → orchestrator → AI model / test sandbox / mutation workers / Playwright). Every particle is a real request recorded by `testforge/telemetry.py`, with real latencies, plus an event stream |
 | **Experiments** | Thesis results read from `results/*/runs.csv`: per-configuration scores, refinement curves, per-module comparison |
+| **Blind Spot Intelligence** | Why each surviving mutant was missed (reachability, infection, propagation or assertion failure, all measured), distinguishing inputs, corrective tests verified on the original, the mutant and the full suite. Heatmap, agent network, code investigation, counterexample lab, resolution centre, timeline |
 | **Runs** | Every run saved on the server: replay a run exactly as it happened, or compare two runs side by side |
 
 ![React dashboard](docs/react/2_generate_done.png)
@@ -37,6 +38,25 @@ npm run build    # writes testforge/web/static/app
 ```
 
 The previous plain-HTML dashboard is still available at `/classic`.
+
+## Blind Spot Intelligence
+
+TestForge does not stop at "this mutant survived". The **Blind Spot Intelligence Agent** (between the
+Mutation Critic and the Writer's targeted refinement) measures *why* each surviving mutant is missed,
+using the RIPR model: is the mutated line ever executed (coverage), do the tests' inputs make it compute
+something different (an infection probe), does that difference reach an output, and does any assertion
+check it? It then searches for an input that separates the original from the mutant (boundary analysis
+and Hypothesis), writes a corrective test, and counts a blind spot as resolved only after the test passes
+on the original, fails on the mutant and leaves the suite green.
+
+```bash
+testforge generate examples/calculator.py --blind-spot          # in the pipeline
+```
+
+In the dashboard: switch **Blind Spot Intelligence** on in the configuration, or open the
+**Blind Spot Intelligence** workspace and run the **Demonstration** (an age check whose tests reach 100%
+line coverage yet miss the boundary at 18). Details, the classification rules, the prioritisation formula
+and the research protocol: [docs/BLIND_SPOT_INTELLIGENCE.md](docs/BLIND_SPOT_INTELLIGENCE.md).
 
 ## How it works
 

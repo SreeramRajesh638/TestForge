@@ -15,7 +15,7 @@ const outDir = onVercel ? "dist" : "../testforge/web/static/app";
 // Client-side routes of the SPA. Each gets its own index.html copy so a deep
 // link or a reload (e.g. /monitor) is served as a static file by the frontend
 // service, with no server-side fallback needed.
-const ROUTES = ["automation", "monitor", "experiments", "runs"];
+const ROUTES = ["automation", "monitor", "experiments", "runs", "blindspot"];
 function spaRouteCopies(): Plugin {
   let root = "";
   return {

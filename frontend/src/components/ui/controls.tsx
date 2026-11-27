@@ -59,13 +59,13 @@ export function Spinner({ size = 16 }: { size?: number }) {
 }
 
 export function Switch({ checked, onChange, label, hint, tone = "accent" }: {
-  checked: boolean; onChange: (v: boolean) => void; label: ReactNode; hint?: ReactNode; tone?: "accent" | "bad";
+  checked: boolean; onChange: (v: boolean) => void; label: ReactNode; hint?: ReactNode; tone?: "accent" | "bad" | "intel";
 }) {
   return (
     <label className="group flex cursor-pointer select-none items-center gap-3 py-1.5">
       <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
         className={clsx("relative h-[22px] w-[38px] flex-none rounded-full p-[3px] transition-colors duration-200",
-          checked ? (tone === "bad" ? "bg-bad" : "bg-accent") : "bg-line-2")}>
+          checked ? (tone === "bad" ? "bg-bad" : tone === "intel" ? "bg-intel" : "bg-accent") : "bg-line-2")}>
         <m.span layout transition={spring.snappy} className={clsx("block h-4 w-4 rounded-full bg-white shadow", checked && "ml-auto")} />
       </button>
       <span className="min-w-0">
@@ -121,10 +121,10 @@ export function Tabs<T extends string>({ value, onChange, tabs }: {
   );
 }
 
-export function Badge({ tone = "muted", children, className }: { tone?: "ok" | "bad" | "warn" | "accent" | "muted" | "info"; children: ReactNode; className?: string }) {
+export function Badge({ tone = "muted", children, className }: { tone?: "ok" | "bad" | "warn" | "accent" | "muted" | "info" | "intel"; children: ReactNode; className?: string }) {
   const t = {
     ok: "bg-ok/10 text-ok", bad: "bg-bad/10 text-bad", warn: "bg-warn/15 text-warn", accent: "bg-accent/15 text-accent",
-    info: "bg-info/10 text-info", muted: "border border-line bg-panel-2 text-ink-2",
+    info: "bg-info/10 text-info", muted: "border border-line bg-panel-2 text-ink-2", intel: "bg-intel/15 text-intel",
   }[tone];
   return <span className={clsx("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px] font-bold tracking-wide", t, className)}>{children}</span>;
 }
